@@ -1509,4 +1509,14 @@ auto SceneV1Python::HandleCapturedJoystickEvent(
   return true;
 }
 
+void SceneV1Python::ReloadHooks() {
+  // Object-sets normally complain if values within it are set more than
+  // once; disable that here to allow us to reload.
+  objs_.set_allow_overwrites(true);
+
+  ImportPythonObjs();
+
+  objs_.set_allow_overwrites(false);
+}
+
 }  // namespace ballistica::scene_v1

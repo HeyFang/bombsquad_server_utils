@@ -185,7 +185,8 @@ void Graphics::AddCleanFrameCommand(const Object::Ref<PythonContextCall>& c) {
 void Graphics::RunCleanFrameCommands() {
   assert(g_base->InLogicThread());
   for (auto&& i : clean_frame_commands_) {
-    i->Run();
+    // Can't run immediately as we're in a frame-draw.
+    i->Schedule();
   }
   clean_frame_commands_.clear();
 }
@@ -767,8 +768,6 @@ void Graphics::BuildAndPushFrameDef() {
   assert(camera_.exists());
   assert(!g_core->HeadlessMode());
 
-  // g_core->logging->Log(LogName::kBa, LogLevel::kWarning, "DRAWING");
-
   // Keep track of when we're in here; can be useful for making sure stuff
   // doesn't muck with our lists/etc. while we're using them.
   assert(!building_frame_def_);
@@ -1141,10 +1140,19 @@ void Graphics::DrawCursor(FrameDef* frame_def) {
       new_cursor_visibility = true;
     }
 
+    // As of macOS 15.6.1 there seems to be a bug where moving the cursor down
+    // from the top portion of a fullscreen window flips it back to the arrow
+    // cursor. Should submit a bug to Apple if this is still the case in macOS
+    // 16, but for now am just forcing cursor resets at a higher frequency there
+    // to hide that.
+    seconds_t fudge_secs =
+        (g_buildconfig.platform_macos() && g_buildconfig.xcode_build()) ? 0.235
+                                                                        : 2.345;
+
     // Ship this state when it changes and also every now and then just in
     // case things go wonky.
     if (new_cursor_visibility != hardware_cursor_visible_
-        || app_time - last_cursor_visibility_event_time_ > 2.137) {
+        || app_time - last_cursor_visibility_event_time_ > fudge_secs) {
       hardware_cursor_visible_ = new_cursor_visibility;
       last_cursor_visibility_event_time_ = app_time;
       g_base->app_adapter->PushMainThreadCall([this] {

@@ -180,6 +180,7 @@ void Assets::StartLoading() {
   LoadSystemTexture(SysTextureID::kSpinner9, "spinner9");
   LoadSystemTexture(SysTextureID::kSpinner10, "spinner10");
   LoadSystemTexture(SysTextureID::kSpinner11, "spinner11");
+  LoadSystemTexture(SysTextureID::kCircleSoft, "circleSoft");
 
   // System cube map textures:
   LoadSystemCubeMapTexture(SysCubeMapTextureID::kReflectionChar,
@@ -1285,6 +1286,7 @@ void Assets::InitSpecialChars() {
   special_char_strings_[SpecialChar::kPlayStationSquareButton] = "\xee\x80\x94";
   special_char_strings_[SpecialChar::kPlayButton] = "\xee\x80\x95";
   special_char_strings_[SpecialChar::kPauseButton] = "\xee\x80\x96";
+  special_char_strings_[SpecialChar::kClose] = "\xee\x80\x97";
 
   special_char_strings_[SpecialChar::kOuyaButtonO] = "\xee\x80\x99";
   special_char_strings_[SpecialChar::kOuyaButtonU] = "\xee\x80\x9A";

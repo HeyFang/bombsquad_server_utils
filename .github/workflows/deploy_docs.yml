@@ -6,17 +6,24 @@ on:
       - main
 
 jobs:
-  build:
+  setup_bombsquad_cache:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-      - name: Setup project environment
-        run: make env
+      - uses: actions/checkout@v4
+      - name: Setup build env
+        uses: ./.github/actions/bombsquad_build_env
+      - name: Make the build
+        run: |
+          make assets-cmake
+          make assets-windows
+
+  build:
+    needs: setup_bombsquad_cache
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup build env
+        uses: ./.github/actions/bombsquad_build_env
       - name: Build documentation
         run: make docs
       - name: Upload the build
@@ -31,8 +38,8 @@ jobs:
 
     # Grant GITHUB_TOKEN the permissions required to make a Pages deployment
     permissions:
-      pages: write      # to deploy to Pages
-      id-token: write   # to verify the deployment originates from an appropriate source
+      pages: write # to deploy to Pages
+      id-token: write # to verify the deployment originates from an appropriate source
 
     # Deploy to the github-pages environment
     environment:

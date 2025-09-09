@@ -341,10 +341,8 @@ SCRIPT_TARGETS_PY_PUBLIC = \
   $(BUILD_DIR)/ba_data/python/bauiv1/onscreenkeyboard.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/__init__.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/account/__init__.py \
-  $(BUILD_DIR)/ba_data/python/bauiv1lib/account/link.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/account/settings.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/account/signin.py \
-  $(BUILD_DIR)/ba_data/python/bauiv1lib/account/unlink.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/account/v2proxy.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/account/viewer.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/achievements.py \
@@ -3763,6 +3761,7 @@ TEX2D_DDS_TARGETS = \
   $(BUILD_DIR)/ba_data/textures/circleOutline.dds \
   $(BUILD_DIR)/ba_data/textures/circleOutlineNoAlpha.dds \
   $(BUILD_DIR)/ba_data/textures/circleShadow.dds \
+  $(BUILD_DIR)/ba_data/textures/circleSoft.dds \
   $(BUILD_DIR)/ba_data/textures/circleZigZag.dds \
   $(BUILD_DIR)/ba_data/textures/clayStroke.dds \
   $(BUILD_DIR)/ba_data/textures/coin.dds \
@@ -4191,6 +4190,7 @@ TEX2D_PVR_TARGETS = \
   $(BUILD_DIR)/ba_data/textures/circleOutline.pvr \
   $(BUILD_DIR)/ba_data/textures/circleOutlineNoAlpha.pvr \
   $(BUILD_DIR)/ba_data/textures/circleShadow.pvr \
+  $(BUILD_DIR)/ba_data/textures/circleSoft.pvr \
   $(BUILD_DIR)/ba_data/textures/circleZigZag.pvr \
   $(BUILD_DIR)/ba_data/textures/clayStroke.pvr \
   $(BUILD_DIR)/ba_data/textures/coin.pvr \
@@ -4619,6 +4619,7 @@ TEX2D_KTX_TARGETS = \
   $(BUILD_DIR)/ba_data/textures/circleOutline.ktx \
   $(BUILD_DIR)/ba_data/textures/circleOutlineNoAlpha.ktx \
   $(BUILD_DIR)/ba_data/textures/circleShadow.ktx \
+  $(BUILD_DIR)/ba_data/textures/circleSoft.ktx \
   $(BUILD_DIR)/ba_data/textures/circleZigZag.ktx \
   $(BUILD_DIR)/ba_data/textures/clayStroke.ktx \
   $(BUILD_DIR)/ba_data/textures/coin.ktx \
@@ -5046,6 +5047,7 @@ TEX2D_PREVIEW_PNG_TARGETS = \
   $(BUILD_DIR)/ba_data/textures/circleOutlineNoAlpha_preview.png \
   $(BUILD_DIR)/ba_data/textures/circleOutline_preview.png \
   $(BUILD_DIR)/ba_data/textures/circleShadow_preview.png \
+  $(BUILD_DIR)/ba_data/textures/circleSoft_preview.png \
   $(BUILD_DIR)/ba_data/textures/circleZigZag_preview.png \
   $(BUILD_DIR)/ba_data/textures/circle_preview.png \
   $(BUILD_DIR)/ba_data/textures/clayStroke_preview.png \
@@ -5703,7 +5705,7 @@ assets-ios: $(ASSET_TARGETS_IOS) $(ASSET_TARGETS_COMMON_GUI)
 assets-android: $(ASSET_TARGETS_ANDROID) $(ASSET_TARGETS_COMMON_GUI)
 
 # Build all assets for all platforms.
-assets: assets-cmake assets-win-Win32
+assets: assets-cmake assets-win-x64
 clean:
 	@rm -rf $(BUILD_DIR)
 

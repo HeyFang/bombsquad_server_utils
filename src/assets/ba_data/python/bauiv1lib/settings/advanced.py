@@ -77,9 +77,7 @@ class AdvancedSettingsWindow(bui.MainWindow):
             root_widget=bui.containerwidget(
                 size=(self._width, self._height),
                 toolbar_visibility=(
-                    'menu_minimal'
-                    if uiscale is bui.UIScale.SMALL
-                    else 'menu_full'
+                    'menu_full' if bui.in_main_menu() else 'menu_minimal'
                 ),
                 scale=scale,
             ),
@@ -100,7 +98,7 @@ class AdvancedSettingsWindow(bui.MainWindow):
         self._show_always_use_internal_keyboard = not app.env.vr
 
         self._sub_width = min(550, self._scroll_width * 0.95)
-        self._sub_height = 870.0
+        self._sub_height = 920.0
 
         if self._show_always_use_internal_keyboard:
             self._sub_height += 62
@@ -180,6 +178,45 @@ class AdvancedSettingsWindow(bui.MainWindow):
             background=False,
             selection_loops_to_parent=True,
         )
+
+        # Add some blotches so our contents fades out as it approaches
+        # the bottom toolbar (but only in the main menu when there's
+        # something down there).
+        if uiscale is bui.UIScale.SMALL and bui.in_main_menu():
+            blotchwidth = 500.0
+            blotchheight = 200.0
+            bimg = bui.imagewidget(
+                parent=self._root_widget,
+                texture=bui.gettexture('uiAtlas'),
+                mesh_transparent=bui.getmesh('windowBGBlotch'),
+                position=(
+                    self._width * 0.5
+                    - self._scroll_width * 0.5
+                    + 60.0
+                    - blotchwidth * 0.5,
+                    scroll_bottom - blotchheight * 0.5,
+                ),
+                size=(blotchwidth, blotchheight),
+                color=(0.4, 0.37, 0.49),
+                # color=(1, 0, 0),
+            )
+            bui.widget(edit=bimg, depth_range=(0.9, 1.0))
+            bimg = bui.imagewidget(
+                parent=self._root_widget,
+                texture=bui.gettexture('uiAtlas'),
+                mesh_transparent=bui.getmesh('windowBGBlotch'),
+                position=(
+                    self._width * 0.5
+                    + self._scroll_width * 0.5
+                    - 60.0
+                    - blotchwidth * 0.5,
+                    scroll_bottom - blotchheight * 0.5,
+                ),
+                size=(blotchwidth, blotchheight),
+                color=(0.4, 0.37, 0.49),
+                # color=(1, 0, 0),
+            )
+            bui.widget(edit=bimg, depth_range=(0.9, 1.0))
 
         self._rebuild()
 
@@ -379,7 +416,7 @@ class AdvancedSettingsWindow(bui.MainWindow):
             width=250,
             opening_call=bui.WeakCall(self._on_menu_open),
             closing_call=bui.WeakCall(self._on_menu_close),
-            autoselect=False,
+            autoselect=True,
             on_value_change_call=bui.WeakCall(self._on_menu_choice),
             choices=['Auto'] + available_languages,
             button_size=(300, 60),
@@ -403,6 +440,12 @@ class AdvancedSettingsWindow(bui.MainWindow):
             ),
             current_choice=cur_lang,
         )
+        if self._back_button is not None:
+            bui.widget(
+                edit=self._language_popup.get_button(),
+                up_widget=self._back_button,
+                left_widget=self._back_button,
+            )
 
         v -= self._spacing * 1.8
 
@@ -755,7 +798,7 @@ class AdvancedSettingsWindow(bui.MainWindow):
         )
 
         for child in self._subcontainer.get_children():
-            bui.widget(edit=child, show_buffer_bottom=30, show_buffer_top=20)
+            bui.widget(edit=child, show_buffer_bottom=60, show_buffer_top=20)
 
         pbtn = bui.get_special_widget('squad_button')
         bui.widget(edit=self._scrollwidget, right_widget=pbtn)

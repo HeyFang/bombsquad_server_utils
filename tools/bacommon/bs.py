@@ -153,6 +153,11 @@ class ClassicAccountLiveData:
         GOLD = 'g'
         DIAMOND = 'd'
 
+    class Flag(Enum):
+        """Flags set for our account."""
+
+        ASK_FOR_REVIEW = 'r'
+
     tickets: Annotated[int, IOAttrs('ti')]
 
     tokens: Annotated[int, IOAttrs('to')]
@@ -178,6 +183,8 @@ class ClassicAccountLiveData:
 
     # State id of our purchases for builds 22459+.
     purchases_state: Annotated[str | None, IOAttrs('p')]
+
+    flags: Annotated[set[Flag], IOAttrs('f', soft_default_factory=set)]
 
 
 class DisplayItemTypeID(Enum):
@@ -786,7 +793,7 @@ class ClientEffectScreenMessage(ClientEffect):
     """Display a screen-message."""
 
     message: Annotated[str, IOAttrs('m')]
-    subs: Annotated[list[str], IOAttrs('s')]
+    subs: Annotated[list[str], IOAttrs('s')] = field(default_factory=list)
     color: Annotated[tuple[float, float, float], IOAttrs('c')] = (1.0, 1.0, 1.0)
 
     @override
@@ -1027,3 +1034,29 @@ class GlobalProfileCheckResponse(Response):
 
     available: Annotated[bool, IOAttrs('a')]
     ticket_cost: Annotated[int, IOAttrs('tc')]
+
+
+@ioprepped
+@dataclass
+class SendInfoMessage(Message):
+    """User is using the send-info function."""
+
+    description: Annotated[str, IOAttrs('c')]
+
+    @override
+    @classmethod
+    def get_response_types(cls) -> list[type[Response] | None]:
+        return [SendInfoResponse]
+
+
+@ioprepped
+@dataclass
+class SendInfoResponse(Response):
+    """Response to sending info to the server."""
+
+    handled: Annotated[bool, IOAttrs('v')]
+    message: Annotated[str | None, IOAttrs('m', store_default=False)] = None
+    effects: Annotated[
+        list[ClientEffect], IOAttrs('e', store_default=False)
+    ] = field(default_factory=list)
+    legacy_code: Annotated[str | None, IOAttrs('l', store_default=False)] = None

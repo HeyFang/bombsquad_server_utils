@@ -461,7 +461,11 @@ def _gen_complete_state_hashes(fnames: list[str]) -> str:
     with ThreadPoolExecutor(max_workers=cpu_count()) as executor:
         hashes = dict(executor.map(_get_simple_file_hash, fnames))
 
-    return json.dumps(hashes, separators=(',', ':'))
+    return json.dumps(
+        hashes,
+        separators=(',', ':'),
+        allow_nan=False,
+    )
 
 
 def _update_cloud_cache(
@@ -766,7 +770,9 @@ def warm_start_cache(cachetype: str) -> None:
             )
             print('Decompressing starter-cache...', flush=True)
             subprocess.run(
-                ['tar', '-xf', starter_cache_file_path], cwd=tmpdir, check=True
+                ['tar', '--no-same-owner', '-xf', starter_cache_file_path],
+                cwd=tmpdir,
+                check=True,
             )
             os.makedirs(os.path.dirname(local_cache_dir), exist_ok=True)
             subprocess.run(

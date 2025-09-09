@@ -494,6 +494,7 @@ enum class SysTextureID : uint8_t {
   kSpinner9,
   kSpinner10,
   kSpinner11,
+  kCircleSoft,
 };
 
 enum class SysCubeMapTextureID : uint8_t {
@@ -831,6 +832,8 @@ class BaseFeatureSet : public FeatureSetNativeComponent,
   auto config_and_state_writes_suppressed() const {
     return config_and_state_writes_suppressed_;
   }
+
+  auto base_import_completed() const { return base_import_completed_; }
 
   /// Reset the engine to a default state. Should only be called by the
   /// active app-mode. App-modes generally call this when first activating,

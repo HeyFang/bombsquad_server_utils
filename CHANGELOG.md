@@ -1,7 +1,48 @@
-### 1.7.48 (build 22498, api 9, 2025-08-14)
+### 1.7.51 (build 22535, api 9, 2025-09-06)
+
+### 1.7.50 (build 22533, api 9, 2025-09-06)
+- Cleaned up cursor handling on Mac build. Fixes an issue where the cursor could
+  sometimes revert to the system cursor for a few seconds after moving the
+  cursor to the top of a fullscreen window.
+- Chest prize odds now show with most valuable stuff at the top instead of
+  bottom (feels more intuitive to me).
+
+### 1.7.49 (build 22524, api 9, 2025-09-04)
+- Fixes an issue where `bascenev1.reload_hooks()` and `bauiv1.reload_hooks()`
+  were actually calling `_babase.reload_hooks()` (oops my bad).
+- Added a `darken_behind` arg for `bauiv1.containerwidget()`. Useful for things
+  such as popups and dialogs to show that stuff outside the container isn't
+  currently tappable.
+- Updated a few more UIs to keeping toolbars visible on small ui-scale (phones).
+  One could argue that showing toolbars at that scale makes things a bit busy
+  looking overall, but I think having them transition in and out constantly
+  looks a bit distracting itself, so let's see how this feels.
+- Updated a few UIs such as help and credits to use the full screen area on
+  small ui-scale (phones) instead of drawing a 'titlebar'.
+- Fixed a few UIs such as Co-op and credits which would draw offscreen on small
+  ui-scale (phones) with very narrow aspect ratios.
+- Various other bits of UI polish. Sometimes you just need a UI polish day.
+
+### 1.7.48 (build 22512, api 9, 2025-08-31)
 - Added Kazakh language (Thanks KAZDOG!)
 - The 'Logging' dev-console-tab is now 'LogLevels'. I kept finding myself going
   there to look for log output. Maybe this will help.
+- Added `ba*.SpecialChar.CLOSE` and wired it up various places instead of the
+  back symbol or old cross-out icon where it makes sense.
+- 'auxiliary' main-windows now use close icons instead of back icons and use
+  scale transitions instead of the normal left/right swipes. Hopefully this
+  helps convey their somewhat modal 'side quest' nature.
+- Added `babase.reload_hooks()` which can be used to get the engine to recognize
+  changes made to `babase._hooks` after the engine is running.
+- Added `bascenev1.reload_hooks()` (see above).
+- Added `bauiv1.reload_hooks()` (see above).
+- Added `baclassic.reload_hooks()` (see above).
+- Removed the legacy (v1) unlinking UI from the account window, as well as the
+  ability to show the legacy linking button (has been hidden by default for a
+  long time but still available with a bit of hacking). If you haven't followed
+  the advice to remove v1 account links by now, you'll need to install an older
+  build to do it.
+- Modernized the send-info ui and backend a bit.
 
 ### 1.7.47 (build 22495, api 9, 2025-08-13)
 - All communication with the V1 (Legacy) master server is now tunneled through
