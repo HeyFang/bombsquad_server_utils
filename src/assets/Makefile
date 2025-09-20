@@ -335,9 +335,11 @@ SCRIPT_TARGETS_PY_PUBLIC = \
   $(BUILD_DIR)/ba_data/python/batemplatefs/_hooks.py \
   $(BUILD_DIR)/ba_data/python/bauiv1/__init__.py \
   $(BUILD_DIR)/ba_data/python/bauiv1/_appsubsystem.py \
+  $(BUILD_DIR)/ba_data/python/bauiv1/_cloudui.py \
   $(BUILD_DIR)/ba_data/python/bauiv1/_hooks.py \
   $(BUILD_DIR)/ba_data/python/bauiv1/_keyboard.py \
   $(BUILD_DIR)/ba_data/python/bauiv1/_uitypes.py \
+  $(BUILD_DIR)/ba_data/python/bauiv1/_window.py \
   $(BUILD_DIR)/ba_data/python/bauiv1/onscreenkeyboard.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/__init__.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/account/__init__.py \
@@ -435,10 +437,12 @@ SCRIPT_TARGETS_PY_PUBLIC = \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/store/item.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/tabs.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/teamnamescolors.py \
+  $(BUILD_DIR)/ba_data/python/bauiv1lib/template.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/tournamententry.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/tournamentscores.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/trophies.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/url.py \
+  $(BUILD_DIR)/ba_data/python/bauiv1lib/utils.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/v2upgrade.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/watch.py \
   $(BUILD_DIR)/ba_data/python/bautils/__init__.py \
@@ -483,7 +487,15 @@ SCRIPT_TARGETS_PY_PUBLIC_TOOLS = \
   $(BUILD_DIR)/ba_data/python/bacommon/app.py \
   $(BUILD_DIR)/ba_data/python/bacommon/assets.py \
   $(BUILD_DIR)/ba_data/python/bacommon/bacloud.py \
-  $(BUILD_DIR)/ba_data/python/bacommon/bs.py \
+  $(BUILD_DIR)/ba_data/python/bacommon/bs/__init__.py \
+  $(BUILD_DIR)/ba_data/python/bacommon/bs/_account.py \
+  $(BUILD_DIR)/ba_data/python/bacommon/bs/_bs.py \
+  $(BUILD_DIR)/ba_data/python/bacommon/bs/_chest.py \
+  $(BUILD_DIR)/ba_data/python/bacommon/bs/_clienteffect.py \
+  $(BUILD_DIR)/ba_data/python/bacommon/bs/_clouddialog.py \
+  $(BUILD_DIR)/ba_data/python/bacommon/bs/_cloudui.py \
+  $(BUILD_DIR)/ba_data/python/bacommon/bs/_displayitem.py \
+  $(BUILD_DIR)/ba_data/python/bacommon/bs/_msg.py \
   $(BUILD_DIR)/ba_data/python/bacommon/build.py \
   $(BUILD_DIR)/ba_data/python/bacommon/cloud.py \
   $(BUILD_DIR)/ba_data/python/bacommon/locale.py \

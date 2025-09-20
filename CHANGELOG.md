@@ -1,4 +1,33 @@
-### 1.7.51 (build 22535, api 9, 2025-09-06)
+### 1.7.51 (build 22548, api 9, 2025-09-19)
+- Deprecated `bauiv1.uicleanupcheck()` - to be removed when api 9 support ends.
+  Use `ba*.app.ui_v1.add_ui_cleanup_check()` instead.
+- Official Mac builds now use OpenALSoft for audio instead of Apple's old
+  bundled OpenAL. Something seems to be broken in the bundled one in macOS Tahoe
+  26.0 causing all of our mono sounds to not play. Weird. It's probably not a
+  bad idea to be using OpenALSoft here anyway since Apple considers theirs
+  deprecated.
+- Related to the above, modified CMakeLists.txt so Mac cmake builds will use
+  homebrew OpenAL Soft instead of Apple's. This means you need to do a `brew
+  install openal-soft` before compiling cmake builds on Mac.
+- While I was in CMakeLists.txt, went ahead and cleaned everything up and
+  modernized it. Please holler if you get build failures with CMake (especially
+  if it worked before).
+- Nitpicky fix: hitting 'OK' to quit on desktop no longer fades back in
+  momentarily before fading out to quit.
+- Updated various scrollable UIs such as the co-op game browser to fade content
+  at the top instead of showing the scroll-box edge when in small ui-mode
+  (phones). This keeps the UI a bit cleaner looking.
+- `ba*.app.mode` now raises `ValueError` if no app-mode is set instead of
+  returning None (This should generally never happen in practice).
+- Added `ba*.app.ui_v1.auxiliary_window_activate()` which formalizes the process
+  for navigating to or from auxiliary main-windows (store, account-settings,
+  etc.).
+- Added `AppMode.get_dev_console_tab_buttons()` for exposing new buttons in the
+  UI dev-console tab.
+- Classic app-mode now provides a 'MainWindow Template' button in the UI
+  dev-console. This brings up `bauiv1lib.template.MainWindowTemplate` which is a
+  minimal example of a well-behaved main-window (handy as a starting point for
+  custom main-windows).
 
 ### 1.7.50 (build 22533, api 9, 2025-09-06)
 - Cleaned up cursor handling on Mac build. Fixes an issue where the cursor could
