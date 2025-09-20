@@ -6007,11 +6007,13 @@ void SpazNode::GetRigidBodyPickupLocations(int id, float* obj, float* character,
 }
 void SpazNode::DropHeldObject() {
   if (holding_something_) {
+    // Remove check that pickup_joint_ is alive since it may have been killed
+    // already
     if (hold_node_.exists()) {
-      assert(pickup_joint_.IsAlive());
-      pickup_joint_.Kill();
+      if (pickup_joint_.IsAlive()) {
+        pickup_joint_.Kill();
+      }
     }
-    assert(!pickup_joint_.IsAlive());
 
     holding_something_ = false;
     hold_body_ = 0;
