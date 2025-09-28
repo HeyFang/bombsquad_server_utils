@@ -459,6 +459,7 @@ SCRIPT_TARGETS_PY_PUBLIC = \
   $(BUILD_DIR)/ba_data/python/bautils/chat/server_command.py \
   $(BUILD_DIR)/ba_data/python/bautils/discord/__init__.py \
   $(BUILD_DIR)/ba_data/python/bautils/plugman/__init__.py \
+  $(BUILD_DIR)/ba_data/python/bautils/plugman/auth.py \
   $(BUILD_DIR)/ba_data/python/bautils/tools/__init__.py \
   $(BUILD_DIR)/ba_data/python/bautils/tools/ctxmanagers.py \
   $(BUILD_DIR)/ba_data/python/bautils/tools/enums.py \

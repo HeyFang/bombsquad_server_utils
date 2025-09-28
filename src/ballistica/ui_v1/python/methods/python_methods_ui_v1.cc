@@ -2742,8 +2742,8 @@ static PyMethodDef PyGetSelectedWidgetDef = {
 
 // ----------------------------- widget_by_id ----------------------------------
 
-static auto PyWidgetByID(PyObject* self, PyObject* args, PyObject* keywds)
-    -> PyObject* {
+static auto PyWidgetByID(PyObject* self, PyObject* args,
+                         PyObject* keywds) -> PyObject* {
   BA_PYTHON_TRY;
 
   const char* id;

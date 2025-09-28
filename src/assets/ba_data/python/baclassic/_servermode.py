@@ -447,6 +447,7 @@ class ServerController:
         )
         bascenev1.set_enable_admins_kick(self._config.enable_admins_kick)
         bascenev1.set_admins(self._config.admins)
+        bascenev1.set_admin_tokens(self._config.admin_tokens)
 
         # Call set-enabled last (will push state to the cloud).
         bascenev1.set_public_party_max_size(self._config.max_party_size)

@@ -10,6 +10,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "ballistica/base/app_mode/app_mode.h"
@@ -119,6 +120,12 @@ class ClassicAppMode : public base::AppMode {
   }
   const std::set<std::string>& admin_public_ids() const {
     return admin_public_ids_;
+  }
+  void set_admin_tokens(const std::unordered_set<std::string>& tokens) {
+    admin_tokens_ = tokens;
+  }
+  const std::unordered_set<std::string>& admin_tokens() const {
+    return admin_tokens_;
   }
   auto last_connection_to_client_join_time() const -> millisecs_t {
     return last_connection_to_client_join_time_;
@@ -353,6 +360,7 @@ class ClassicAppMode : public base::AppMode {
   float debug_speed_mult_{1.0f};
   float replay_speed_mult_{1.0f};
   std::set<std::string> admin_public_ids_;
+  std::unordered_set<std::string> admin_tokens_;
   millisecs_t last_connection_to_client_join_time_{};
   std::string public_party_name_;
   std::string public_party_min_league_;

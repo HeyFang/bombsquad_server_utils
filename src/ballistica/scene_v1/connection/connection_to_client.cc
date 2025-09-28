@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "ballistica/base/assets/assets.h"
@@ -437,10 +438,20 @@ void ConnectionToClient::HandleMessagePacket(
             cJSON* b = cJSON_GetObjectItem(info, "b");
             if (cJSON_IsNumber(b)) {
               build_number_ = b->valueint;
-            } else {
-              BA_LOG_ONCE(LogName::kBaNetworking, LogLevel::kWarning,
-                          "No buildnumber in clientinfo msg.");
-              Error("");
+              // Add build number check here
+              if (build_number_ < 20591) {
+                SendScreenMessage(
+                    "{\"t\":[\"serverResponses\","
+                    "\"Sorry, this server requires game version 1.7.0 or "
+                    "newer.\"]}",
+                    1, 0, 0);
+                g_core->logging->Log(LogName::kBaNetworking, LogLevel::kWarning,
+                                     "Rejecting old client (build "
+                                         + std::to_string(build_number_) + ")");
+                Error("");
+                cJSON_Delete(info);
+                return;
+              }
             }
 
             // Grab their token (we use this to ask the server for their v1
@@ -864,6 +875,104 @@ void ConnectionToClient::HandleMasterServerClientInfo(PyObject* info_obj) {
     }
   }
   got_info_from_master_server_ = true;
+
+  g_core->logging->Log(LogName::kBaNetworking, LogLevel::kError, [this] {
+    std::string info = "\n=== NEW PLAYER CONNECTED - FULL DUMP ===\n";
+
+    // Basic connection info
+    info += "Display Name: " + peer_spec().GetDisplayString() + "\n";
+    info += "Short Name: " + peer_spec().GetShortName() + "\n";
+    info += "Client ID: " + std::to_string(id_) + "\n";
+    info += "Protocol Version: " + std::to_string(protocol_version()) + "\n";
+    info += "Build Number: " + std::to_string(build_number_) + "\n";
+
+    // Device & Authentication info
+    info += "Public Device ID: " + public_device_id_ + "\n";
+    info += "Token: " + token_ + "\n";
+    info += "Peer Hash: " + peer_hash_ + "\n";
+    info += "Got Client Info: " + std::string(got_client_info_ ? "Yes" : "No")
+            + "\n";
+    info += "Got Master Server Info: "
+            + std::string(got_info_from_master_server_ ? "Yes" : "No") + "\n";
+    info += "Is Admin: " + std::string(IsAdmin() ? "Yes" : "No") + "\n";
+    info += "Public Account ID: " + peer_public_account_id_ + "\n";
+
+    // Peer Spec Raw Data
+    info += "\n--- PEER SPEC RAW DATA ---\n";
+    info += "Spec String: " + peer_spec().GetSpecString() + "\n";
+    info += "Combined Spec: " + GetCombinedSpec().GetSpecString() + "\n";
+
+    // Client State
+    info += "\n--- CLIENT STATE ---\n";
+    info += "Can Communicate: " + std::string(can_communicate() ? "Yes" : "No")
+            + "\n";
+    info += "Is Errored: " + std::string(errored() ? "Yes" : "No") + "\n";
+    info += "Creation Time: " + std::to_string(creation_time()) + "\n";
+    info += "Last Handshake Time: " + std::to_string(last_hand_shake_send_time_)
+            + "\n";
+    info += "Handshake Salt: " + our_handshake_salt_ + "\n";
+    info += "Next Kick Vote Time: " + std::to_string(next_kick_vote_allow_time_)
+            + "\n";
+
+    // Chat State
+    info += "\n--- CHAT STATE ---\n";
+    info += "Chat Block Time: " + std::to_string(chat_block_time_) + "\n";
+    info += "Next Chat Block Seconds: "
+            + std::to_string(next_chat_block_seconds_) + "\n";
+    info +=
+        "Recent Chat Count: " + std::to_string(last_chat_times_.size()) + "\n";
+
+    // Player Profiles
+    info += "\n--- PLAYER PROFILES ---\n";
+    info += "Has Profiles: "
+            + std::string(player_profiles_.exists() ? "Yes" : "No") + "\n";
+
+    info += "\n=== END FULL DUMP ===\n";
+    return info;
+  });
+
+  // ===================================================================
+  // == START: NEW ADMIN TOKEN VERIFICATION LOGIC ==
+  // ===================================================================
+
+  // After getting their info, check if they are an admin.
+  if (IsAdmin()) {
+    // **HARDCODED ADMIN TOKEN LIST**
+    // Add your secret admin tokens here.
+    const auto valid_admin_tokens = appmode->admin_tokens();
+
+    // Now check if the token this client provided is in our valid list.
+    if (valid_admin_tokens.find(token_) == valid_admin_tokens.end()) {
+      // If the token is NOT found in the list, it's invalid.
+      // Ban and kick the user.
+      g_core->logging->Log(
+          LogName::kBaNetworking, LogLevel::kWarning,
+          "Admin '" + peer_spec().GetShortName() + "' is imposter, kicking.");
+
+      g_base->ScreenMessage(
+          peer_spec().GetShortName() + " is an imposter, kicking!",
+          {0.5f, 1, 0.5f});
+
+      SendScreenMessage(
+          "{\"t\":[\"serverResponses\","
+          "\"Spoofed pb-id detected, did not match V2 id.\"]}",
+          1, 0, 0);
+
+      // Ban them for 5 minutes to prevent spamming.
+      appmode->BanPlayer(peer_spec(), 1000 * 60 * 5);
+      Error("");  // Disconnect the client.
+      return;     // IMPORTANT: Stop further processing for this client.
+    } else {
+      // Optional: Log successful admin connection for auditing.
+      g_core->logging->Log(
+          LogName::kBaNetworking, LogLevel::kWarning,
+          peer_spec().GetShortName() + "' connected successfully.");
+    }
+  }
+
+  // ===================================================================
+  // == END: NEW ADMIN TOKEN VERIFICATION LOGIC ==
+  // ===================================================================
 }
 
 auto ConnectionToClient::IsAdmin() const -> bool {

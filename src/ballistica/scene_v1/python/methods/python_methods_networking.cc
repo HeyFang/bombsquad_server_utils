@@ -4,6 +4,7 @@
 
 #include <set>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "ballistica/base/assets/assets.h"
@@ -346,6 +347,41 @@ static PyMethodDef PySetAdminsDef = {
     METH_VARARGS | METH_KEYWORDS,  // flags
 
     "set_admins(admins: list[str]) -> None\n"
+    "\n"
+    "(internal)",
+};
+
+// --------------------------- set_admin_tokens ------------------------------
+
+static auto PySetAdminTokens(PyObject* self, PyObject* args,
+                             PyObject* keywds) -> PyObject* {
+  BA_PYTHON_TRY;
+  PyObject* tokens_obj;
+  static const char* kwlist[] = {"tokens", nullptr};
+  if (!PyArg_ParseTupleAndKeywords(args, keywds, "O",
+                                   const_cast<char**>(kwlist), &tokens_obj)) {
+    return nullptr;
+  }
+  auto* appmode = classic::ClassicAppMode::GetActiveOrThrow();
+
+  // This part is different: we use the admin_tokens_ variable.
+  // We're converting a Python list of strings to a C++ set of strings.
+  auto tokens = Python::GetStrings(tokens_obj);
+  std::unordered_set<std::string> tokenset;
+  for (auto&& token : tokens) {
+    tokenset.insert(token);
+  }
+  appmode->set_admin_tokens(tokenset);  // We'll need to create this setter.
+
+  Py_RETURN_NONE;
+  BA_PYTHON_CATCH;
+}
+
+static PyMethodDef PySetAdminTokensDef = {
+    "set_admin_tokens",             // name
+    (PyCFunction)PySetAdminTokens,  // method
+    METH_VARARGS | METH_KEYWORDS,   // flags
+    "set_admin_tokens(tokens: list[str]) -> None\n"
     "\n"
     "(internal)",
 };
@@ -939,6 +975,7 @@ auto PythonMethodsNetworking::GetMethods() -> std::vector<PyMethodDef> {
       PySetPublicPartyPublicAddressIPV6Def,
       PySetAuthenticateClientsDef,
       PySetAdminsDef,
+      PySetAdminTokensDef,
       PySetEnableAdminsKickDef,
       PySetEnableDefaultKickVotingDef,
       PySetPublicPartyMaxSizeDef,
