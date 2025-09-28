@@ -2,6 +2,7 @@
 
 #include "ballistica/ui_v1/widget/widget.h"
 
+#include <string>
 #include <vector>
 
 #include "ballistica/base/python/support/python_context_call.h"
@@ -13,9 +14,18 @@
 
 namespace ballistica::ui_v1 {
 
-Widget::Widget() = default;
+Widget::Widget() : source_location_{Python::PythonFileLocation()} {}
 
 Widget::~Widget() {
+  assert(g_base->InLogicThread());
+
+  if (in_hierarchy_) {
+    if (id().has_value()) {
+      g_ui_v1->UnregisterWidgetID(*id(), this);
+    }
+    in_hierarchy_ = false;
+  }
+
   // Release our ref to ourself if we have one.
   if (py_ref_) {
     Py_DECREF(py_ref_);
@@ -24,7 +34,6 @@ Widget::~Widget() {
   auto on_delete_calls = on_delete_calls_;
   for (auto&& i : on_delete_calls) {
     i->ScheduleInUIOperation();
-    // i->Run();
   }
 }
 
@@ -96,6 +105,7 @@ void Widget::SetSelected(bool s, SelectionCause cause) {
 }
 
 auto Widget::IsHierarchySelected() const -> bool {
+  assert(g_base->InLogicThread());
   const Widget* p = this;
   while (true) {
     if (!p->selected()) {
@@ -118,6 +128,7 @@ void Widget::AddOnDeleteCall(PyObject* call_obj) {
 }
 
 void Widget::GlobalSelect() {
+  assert(g_base->InLogicThread());
   Widget* w = this;
   ContainerWidget* c = parent_widget();
   if (!c) {
@@ -134,6 +145,7 @@ void Widget::GlobalSelect() {
 }
 
 void Widget::Show() {
+  assert(g_base->InLogicThread());
   Widget* w = this;
   ContainerWidget* c = parent_widget();
   if (!c) {
@@ -262,6 +274,26 @@ void Widget::SetUpWidget(Widget* w) {
 void Widget::SetDownWidget(Widget* w) {
   BA_PRECONDITION(!neighbors_locked_);
   down_widget_ = w;
+}
+
+void Widget::SetID(const std::string& id) {
+  // It is caller's responsibility to only call us once before we are
+  // added to a parent widget.
+  assert(!id_.has_value());
+  assert(!in_hierarchy_);
+
+  // Validate IDs.
+  for (char c : id) {
+    bool ok = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
+              || (c >= '0' && c <= '9') || c == '_' || c == '|';
+    if (!ok) {
+      throw Exception(
+          "Invalid character '" + std::string(1, c) + "' in id: '" + id + "'",
+          PyExcType::kValue);
+    }
+  }
+
+  id_ = id;
 }
 
 }  // namespace ballistica::ui_v1

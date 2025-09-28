@@ -95,13 +95,8 @@ class LeagueRankWindow(bui.MainWindow):
         super().__init__(
             root_widget=bui.containerwidget(
                 size=(self._width, self._height),
-                # stack_offset=(
-                #     (0, 0)
-                #     if uiscale is bui.UIScale.SMALL
-                #     else (0, 0) if uiscale is bui.UIScale.MEDIUM else (0, 0)
-                # ),
                 scale=scale,
-                toolbar_visibility=('menu_full'),
+                toolbar_visibility='menu_full',
                 toolbar_cancel_button_style=(
                     'close' if auxiliary_style else 'back'
                 ),
@@ -248,7 +243,9 @@ class LeagueRankWindow(bui.MainWindow):
         if self._season == 'a' or self._is_current_season:
             prab = self._power_ranking_achievements_button
             assert prab is not None
-            self.main_window_replace(AchievementsWindow(origin_widget=prab))
+            self.main_window_replace(
+                lambda: AchievementsWindow(origin_widget=prab)
+            )
         else:
             bui.screenmessage(
                 bui.Lstr(

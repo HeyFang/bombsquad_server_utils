@@ -22,9 +22,11 @@ PyNumberMethods PythonClassWidget::as_number_;
 
 // Attrs we expose through our custom getattr/setattr.
 #define ATTR_TRANSITIONING_OUT "transitioning_out"
+#define ATTR_ID "id"
 
 // The set we expose via dir().
-static const char* extra_dir_attrs[] = {ATTR_TRANSITIONING_OUT, nullptr};
+static const char* extra_dir_attrs[] = {ATTR_TRANSITIONING_OUT, ATTR_ID,
+                                        nullptr};
 
 auto PythonClassWidget::type_name() -> const char* { return "Widget"; }
 
@@ -48,7 +50,10 @@ void PythonClassWidget::SetupType(PyTypeObject* cls) {
       "\n"
       "        It can be useful to check this on a window's root widget to\n"
       "        prevent multiple window actions from firing simultaneously,\n"
-      "        potentially leaving the UI in a broken state.\n";
+      "        potentially leaving the UI in a broken state.\n"
+  "\n"
+      "    " ATTR_ID " (str | None):\n"
+      "        ID for this widget (if any).\n";
 
   // clang-format on
 
@@ -111,6 +116,16 @@ auto PythonClassWidget::tp_getattro(PythonClassWidget* self,
     }
     Py_RETURN_FALSE;
   }
+  if (!strcmp(s, ATTR_ID)) {
+    Widget* w = self->widget_->get();
+    if (!w) {
+      throw Exception("Invalid Widget", PyExcType::kReference);
+    }
+    if (w->id().has_value()) {
+      return PyUnicode_FromString(w->id()->c_str());
+    }
+    Py_RETURN_NONE;
+  }
 
   // Fall back to generic behavior.
   PyObject* val;
@@ -137,10 +152,25 @@ auto PythonClassWidget::tp_setattro(PythonClassWidget* self, PyObject* attr,
 auto PythonClassWidget::tp_repr(PythonClassWidget* self) -> PyObject* {
   BA_PYTHON_TRY;
   Widget* w = self->widget_->get();
-  return Py_BuildValue("s", (std::string("<bauiv1 '")
-                             + (w ? w->GetWidgetTypeName() : "<invalid>")
-                             + "' widget " + Utils::PtrToString(w) + ">")
-                                .c_str());
+
+  std::string typestr{(w ? ("'" + w->GetWidgetTypeName() + "'") : "<invalid>")};
+
+  std::string idstr;
+  if (w && w->id().has_value()) {
+    idstr = "'" + *w->id() + "'";
+  } else {
+    idstr = "None";
+  }
+
+  std::string originstr;
+  if (w) {
+    originstr = "'" + w->source_location() + "'";
+  }
+
+  return Py_BuildValue(
+      "s", ("<_bauiv1.Widget at " + Utils::PtrToString(w) + " (type=" + typestr
+            + ", id=" + idstr + ", origin=" + originstr + ")>")
+               .c_str());
   BA_PYTHON_CATCH;
 }
 
@@ -333,6 +363,18 @@ auto PythonClassWidget::AddDeleteCallback(PythonClassWidget* self,
   BA_PYTHON_CATCH;
 }
 
+auto PythonClassWidget::GlobalSelect(PythonClassWidget* self) -> PyObject* {
+  BA_PYTHON_TRY;
+  BA_PRECONDITION(g_base->InLogicThread());
+  Widget* w = self->widget_->get();
+  if (!w) {
+    throw Exception(PyExcType::kWidgetNotFound);
+  }
+  w->GlobalSelect();
+  Py_RETURN_NONE;
+  BA_PYTHON_CATCH;
+}
+
 auto PythonClassWidget::Dir(PythonClassWidget* self) -> PyObject* {
   BA_PYTHON_TRY;
 
@@ -398,6 +440,16 @@ PyMethodDef PythonClassWidget::tp_methods[] = {
      "add_delete_callback(call: Callable) -> None\n"
      "\n"
      "Add a call to be run immediately after this widget is destroyed."},
+    {"global_select", (PyCFunction)GlobalSelect,
+     METH_NOARGS,  // NOLINT (signed bitwise stuff)
+     "global_select() -> None\n"
+     "\n"
+     "Select this widget globally.\n"
+     "\n"
+     "This should be used with caution. In general it is better to set\n"
+     " selected-child on container widgets.\n"
+     "\n"
+     ":meta private:"},
     {"__dir__", (PyCFunction)Dir, METH_NOARGS,
      "allows inclusion of our custom attrs in standard python dir()"},
     {nullptr}};
