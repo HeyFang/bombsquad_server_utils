@@ -250,13 +250,17 @@ class MeteorShowerGame(bs.TeamGameActivity[Player, Team]):
             delay += 0.1
         self._set_meteor_timer()
 
-    def _drop_bomb(self, position: Sequence[float], velocity: Sequence[float]) -> None:
-        bomb_types = ["land_mine", "normal", "sticky", "ice", "impact"]
+    def _drop_bomb(
+        self, position: Sequence[float], velocity: Sequence[float]
+    ) -> None:
+        bomb_types = ['land_mine', 'normal', 'sticky', 'ice', 'impact']
         random_bomb_type = random.choice(bomb_types)
-        bomb = Bomb(position=position, bomb_type=random_bomb_type, velocity=velocity).autoretain()
-        
+        bomb = Bomb(
+            position=position, bomb_type=random_bomb_type, velocity=velocity
+        ).autoretain()
+
         # Only arm land_mine or impact bombs
-        if random_bomb_type in ["land_mine", "impact"]:
+        if random_bomb_type in ['land_mine', 'impact']:
             bomb.arm()
 
     def _decrement_meteor_time(self) -> None:

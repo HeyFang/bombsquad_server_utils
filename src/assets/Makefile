@@ -290,6 +290,7 @@ SCRIPT_TARGETS_PY_PUBLIC = \
   $(BUILD_DIR)/ba_data/python/bascenev1lib/actor/zoomtext.py \
   $(BUILD_DIR)/ba_data/python/bascenev1lib/game/__init__.py \
   $(BUILD_DIR)/ba_data/python/bascenev1lib/game/assault.py \
+  $(BUILD_DIR)/ba_data/python/bascenev1lib/game/boxing.py \
   $(BUILD_DIR)/ba_data/python/bascenev1lib/game/capturetheflag.py \
   $(BUILD_DIR)/ba_data/python/bascenev1lib/game/chosenone.py \
   $(BUILD_DIR)/ba_data/python/bascenev1lib/game/conquest.py \

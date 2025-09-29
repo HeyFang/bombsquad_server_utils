@@ -155,6 +155,7 @@
  "ba_data/python/bascenev1lib/actor/zoomtext.py",
  "ba_data/python/bascenev1lib/game/__init__.py",
  "ba_data/python/bascenev1lib/game/assault.py",
+ "ba_data/python/bascenev1lib/game/boxing.py",
  "ba_data/python/bascenev1lib/game/capturetheflag.py",
  "ba_data/python/bascenev1lib/game/chosenone.py",
  "ba_data/python/bascenev1lib/game/conquest.py",
