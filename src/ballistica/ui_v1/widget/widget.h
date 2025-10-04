@@ -77,7 +77,7 @@ class Widget : public Object {
   void GlobalSelect();
 
   /// Show this widget if possible (by scrolling to it, etc).
-  void Show();
+  void ScrollIntoView();
 
   /// Returns true if the widget is the currently selected child of its
   /// parent. Note that this does not mean that the parent is selected,
@@ -118,6 +118,13 @@ class Widget : public Object {
 
   void set_auto_select(bool enable) { auto_select_ = enable; }
   auto auto_select() const -> bool { return auto_select_; }
+
+  void set_allow_preserve_selection(bool val) {
+    allow_preserve_selection_ = val;
+  }
+  auto allow_preserve_selection() const -> bool {
+    return allow_preserve_selection_;
+  }
 
   // If neighbors are locked, calls to set the up/down/left/right widget
   // will fail. (useful for global toolbar widgets where we don't want users
@@ -286,6 +293,7 @@ class Widget : public Object {
   bool neighbors_locked_{};
   bool auto_select_{};
   bool in_hierarchy_{};
+  bool allow_preserve_selection_{true};
 };
 
 }  // namespace ballistica::ui_v1

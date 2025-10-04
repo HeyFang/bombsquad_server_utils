@@ -1532,9 +1532,11 @@ void ContainerWidget::SelectWidget(Widget* w, SelectionCause c) {
         } else {
           static bool printed = false;
           if (!printed) {
-            g_core->logging->Log(LogName::kBa, LogLevel::kWarning,
-                                 "SelectWidget called on unselectable widget: "
-                                     + w->GetWidgetTypeName());
+            g_core->logging->Log(
+                LogName::kBa, LogLevel::kWarning,
+                "SelectWidget called on unselectable widget: (type='"
+                    + w->GetWidgetTypeName() + "', id '"
+                    + (w->id().has_value() ? *w->id() : "None") + "')");
             Python::PrintStackTrace();
             printed = true;
           }
@@ -1736,7 +1738,7 @@ void ContainerWidget::SelectDownWidget() {
         g_core->logging->Log(LogName::kBa, LogLevel::kError,
                              "Down_widget is not selectable.");
       } else {
-        w->Show();
+        w->ScrollIntoView();
         // Avoid tap sounds and whatnot if we're just re-selecting ourself.
         if (w != selected_widget_) {
           w->GlobalSelect();
@@ -1802,7 +1804,7 @@ void ContainerWidget::SelectUpWidget() {
         g_core->logging->Log(LogName::kBa, LogLevel::kError,
                              "up_widget is not selectable.");
       } else {
-        w->Show();
+        w->ScrollIntoView();
         // Avoid tap sounds and whatnot if we're just re-selecting ourself.
         if (w != selected_widget_) {
           w->GlobalSelect();
@@ -1856,7 +1858,7 @@ void ContainerWidget::SelectLeftWidget() {
         g_core->logging->Log(LogName::kBa, LogLevel::kError,
                              "left_widget is not selectable.");
       } else {
-        w->Show();
+        w->ScrollIntoView();
         // Avoid tap sounds and whatnot if we're just re-selecting ourself.
         if (w != selected_widget_) {
           w->GlobalSelect();
@@ -1910,7 +1912,7 @@ void ContainerWidget::SelectRightWidget() {
         g_core->logging->Log(LogName::kBa, LogLevel::kError,
                              "right_widget is not selectable.");
       } else {
-        w->Show();
+        w->ScrollIntoView();
         // Avoid tap sounds and whatnot if we're just re-selecting ourself.
         if (w != selected_widget_) {
           w->GlobalSelect();

@@ -357,6 +357,7 @@ class GetTokensWindow(bui.MainWindow):
             # We're affected by screen size only at small ui-scale.
             refresh_on_screen_size_changes=uiscale is bui.UIScale.SMALL,
         )
+        bui.widget(edit=self._root_widget, allow_preserve_selection=False)
 
         if uiscale is bui.UIScale.SMALL:
             bui.containerwidget(
@@ -366,6 +367,7 @@ class GetTokensWindow(bui.MainWindow):
         else:
             self._back_button = bui.buttonwidget(
                 parent=self._root_widget,
+                id=f'{self.main_window_id_prefix}|back',
                 position=(60, self._yoffs - 90),
                 size=((60, 60)),
                 scale=1.0,
@@ -443,6 +445,10 @@ class GetTokensWindow(bui.MainWindow):
                 transition=transition, origin_widget=origin_widget
             )
         )
+
+    @override
+    def main_window_should_preserve_selection(self) -> bool:
+        return True
 
     def _update(self) -> None:
         # No-op if our underlying widget is dead or on its way out.
@@ -596,6 +602,7 @@ class GetTokensWindow(bui.MainWindow):
         )
         tinfobtn = bui.buttonwidget(
             parent=self._root_widget,
+            id=f'{self.main_window_id_prefix}|learnmore',
             autoselect=True,
             label=bui.Lstr(resource='learnMoreText'),
             text_scale=0.7,
@@ -634,6 +641,7 @@ class GetTokensWindow(bui.MainWindow):
             btn = bui.buttonwidget(
                 autoselect=True,
                 label='',
+                id=f'{self.main_window_id_prefix}|button{i}',
                 color=buttondef.color,
                 transition_delay=tdelay,
                 up_widget=tinfobtn,
@@ -740,6 +748,14 @@ class GetTokensWindow(bui.MainWindow):
                 maxwidth=self._scroll_width * 0.9,
                 text=bui.Lstr(resource='removeInGameAdsTokenPurchaseText'),
             )
+
+        # Most of our UI won't exist until this point so we need to
+        # explicitly restore state for selection restore to work.
+        #
+        # Note to self: perhaps we should *not* do this if significant
+        # time has passed since the window was made or if input commands
+        # have happened.
+        self.main_window_restore_shared_state()
 
     def _purchase_press(self, itemid: str) -> None:
         plus = bui.app.plus

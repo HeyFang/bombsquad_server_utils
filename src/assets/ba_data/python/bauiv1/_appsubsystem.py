@@ -74,6 +74,7 @@ class UIV1AppSubsystem(babase.AppSubsystem):
         # For storing arbitrary class-level state data for Windows or
         # other UI related classes.
         self.window_states: dict[type, Any] = {}
+        self.main_window_shared_states: dict = {}
 
         self.title_color = (0.72, 0.7, 0.75)
         self.heading_color = (0.72, 0.7, 0.75)
@@ -153,7 +154,6 @@ class UIV1AppSubsystem(babase.AppSubsystem):
 
     def set_main_window(
         self,
-        # window: bauiv1.MainWindow | Callable[[], bauiv1.MainWindow],
         window: bauiv1.MainWindow,
         *,
         back_state: MainWindowState | None,
@@ -162,6 +162,7 @@ class UIV1AppSubsystem(babase.AppSubsystem):
         is_top_level: bool = False,
         is_auxiliary: bool = False,
         suppress_warning: bool = False,
+        restore_shared_state: bool = True,
     ) -> None:
         """Set the current 'main' window.
 
@@ -174,6 +175,7 @@ class UIV1AppSubsystem(babase.AppSubsystem):
         """
         # pylint: disable=too-many-branches
         # pylint: disable=too-many-statements
+        # pylint: disable=too-many-locals
         from bauiv1._window import MainWindow
 
         # If we haven't grabbed initial uiscale or screen size for
@@ -306,34 +308,14 @@ class UIV1AppSubsystem(babase.AppSubsystem):
                 # Top level windows don't have or expect anywhere to go
                 # back to.
                 assert back_state is None
-                # window.main_window_back_state = None
-            # elif back_state is not None:
-            # Use a supplied back-state.
-            #     window.main_window_back_state = back_state
-            # else:
-            #     # Calc a back-state from the current window.
-            #     oldwin = self._main_window()
-            #     if oldwin is None:
-            #         # We currenty only hold weak refs to windows so that
-            #         # they are free to die on their own, but we expect
-            #         # the main menu window to keep itself alive as long
-            #         # as its the main one. Holler if that seems to not
-            #         # be happening.
-            #         logging.warning(
-            #             'set_main_window: No old MainWindow found'
-            #             ' and is_top_level is False;'
-            #             ' this should not happen.'
-            #         )
-            #         window.main_window_back_state = None
-            #     else:
-            #         window.main_window_back_state
-            # = self.save_main_window_state(
-            #             oldwin
-            #         )
             window.main_window_back_state = back_state
 
         self._main_window = window_weakref
         self._main_window_widget = window_widget
+
+        # Now that we're all set up, restore any state.
+        if restore_shared_state:
+            window.main_window_restore_shared_state()
 
     def has_main_window(self) -> bool:
         """Return whether a main menu window is present."""
