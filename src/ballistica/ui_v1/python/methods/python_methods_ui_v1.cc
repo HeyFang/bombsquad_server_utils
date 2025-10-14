@@ -29,8 +29,8 @@ namespace ballistica::ui_v1 {
 
 // ------------------------------ getsound -------------------------------------
 
-static auto PyGetSound(PyObject* self, PyObject* args, PyObject* keywds)
-    -> PyObject* {
+static auto PyGetSound(PyObject* self, PyObject* args,
+                       PyObject* keywds) -> PyObject* {
   BA_PYTHON_TRY;
   const char* name;
   static const char* kwlist[] = {"name", nullptr};
@@ -59,8 +59,8 @@ static PyMethodDef PyGetSoundDef = {
 
 // ----------------------------- gettexture ------------------------------------
 
-static auto PyGetTexture(PyObject* self, PyObject* args, PyObject* keywds)
-    -> PyObject* {
+static auto PyGetTexture(PyObject* self, PyObject* args,
+                         PyObject* keywds) -> PyObject* {
   BA_PYTHON_TRY;
   const char* name;
   static const char* kwlist[] = {"name", nullptr};
@@ -88,8 +88,8 @@ static PyMethodDef PyGetTextureDef = {
 
 // -------------------------- get_qrcode_texture -------------------------------
 
-static auto PyGetQRCodeTexture(PyObject* self, PyObject* args, PyObject* keywds)
-    -> PyObject* {
+static auto PyGetQRCodeTexture(PyObject* self, PyObject* args,
+                               PyObject* keywds) -> PyObject* {
   BA_PYTHON_TRY;
   const char* url;
   static const char* kwlist[] = {"url", nullptr};
@@ -118,8 +118,8 @@ static PyMethodDef PyGetQRCodeTextureDef = {
 
 // ------------------------------- getmesh -------------------------------------
 
-static auto PyGetMesh(PyObject* self, PyObject* args, PyObject* keywds)
-    -> PyObject* {
+static auto PyGetMesh(PyObject* self, PyObject* args,
+                      PyObject* keywds) -> PyObject* {
   BA_PYTHON_TRY;
   const char* name;
   static const char* kwlist[] = {"name", nullptr};
@@ -147,8 +147,8 @@ static PyMethodDef PyGetMeshDef = {
 
 // ----------------------------- buttonwidget ----------------------------------
 
-static auto PyButtonWidget(PyObject* self, PyObject* args, PyObject* keywds)
-    -> PyObject* {
+static auto PyButtonWidget(PyObject* self, PyObject* args,
+                           PyObject* keywds) -> PyObject* {
   BA_PYTHON_TRY;
   PyObject* parent_obj{Py_None};
   PyObject* id_obj{Py_None};
@@ -514,8 +514,8 @@ static PyMethodDef PyButtonWidgetDef = {
 
 // --------------------------- checkboxwidget ----------------------------------
 
-static auto PyCheckBoxWidget(PyObject* self, PyObject* args, PyObject* keywds)
-    -> PyObject* {
+static auto PyCheckBoxWidget(PyObject* self, PyObject* args,
+                             PyObject* keywds) -> PyObject* {
   BA_PYTHON_TRY;
   PyObject* size_obj{Py_None};
   PyObject* id_obj{Py_None};
@@ -694,8 +694,8 @@ static PyMethodDef PyCheckBoxWidgetDef = {
 
 // ----------------------------- imagewidget -----------------------------------
 
-static auto PyImageWidget(PyObject* self, PyObject* args, PyObject* keywds)
-    -> PyObject* {
+static auto PyImageWidget(PyObject* self, PyObject* args,
+                          PyObject* keywds) -> PyObject* {
   BA_PYTHON_TRY;
   PyObject* size_obj{Py_None};
   PyObject* pos_obj{Py_None};
@@ -898,8 +898,8 @@ static PyMethodDef PyImageWidgetDef = {
 
 // ----------------------------- imagewidget -----------------------------------
 
-static auto PySpinnerWidget(PyObject* self, PyObject* args, PyObject* keywds)
-    -> PyObject* {
+static auto PySpinnerWidget(PyObject* self, PyObject* args,
+                            PyObject* keywds) -> PyObject* {
   BA_PYTHON_TRY;
   PyObject* edit_obj{Py_None};
   PyObject* parent_obj{Py_None};
@@ -1000,8 +1000,8 @@ static PyMethodDef PySpinnerWidgetDef = {
 
 // ----------------------------- columnwidget ----------------------------------
 
-static auto PyColumnWidget(PyObject* self, PyObject* args, PyObject* keywds)
-    -> PyObject* {
+static auto PyColumnWidget(PyObject* self, PyObject* args,
+                           PyObject* keywds) -> PyObject* {
   BA_PYTHON_TRY;
 
   PyObject* id_obj{Py_None};
@@ -1182,8 +1182,8 @@ static PyMethodDef PyColumnWidgetDef = {
 
 // ---------------------------- containerwidget --------------------------------
 
-static auto PyContainerWidget(PyObject* self, PyObject* args, PyObject* keywds)
-    -> PyObject* {
+static auto PyContainerWidget(PyObject* self, PyObject* args,
+                              PyObject* keywds) -> PyObject* {
   BA_PYTHON_TRY;
   PyObject* size_obj{Py_None};
   PyObject* pos_obj{Py_None};
@@ -1575,8 +1575,8 @@ static PyMethodDef PyContainerWidgetDef = {
 
 // ------------------------------ rowwidget ------------------------------------
 
-static auto PyRowWidget(PyObject* self, PyObject* args, PyObject* keywds)
-    -> PyObject* {
+static auto PyRowWidget(PyObject* self, PyObject* args,
+                        PyObject* keywds) -> PyObject* {
   BA_PYTHON_TRY;
 
   PyObject* size_obj{Py_None};
@@ -1701,8 +1701,8 @@ static PyMethodDef PyRowWidgetDef = {
 
 // ---------------------------- scrollwidget -----------------------------------
 
-static auto PyScrollWidget(PyObject* self, PyObject* args, PyObject* keywds)
-    -> PyObject* {
+static auto PyScrollWidget(PyObject* self, PyObject* args,
+                           PyObject* keywds) -> PyObject* {
   BA_PYTHON_TRY;
   PyObject* size_obj{Py_None};
   PyObject* pos_obj{Py_None};
@@ -1895,8 +1895,8 @@ static PyMethodDef PyScrollWidgetDef = {
 
 // ---------------------------- hscrollwidget ----------------------------------
 
-static auto PyHScrollWidget(PyObject* self, PyObject* args, PyObject* keywds)
-    -> PyObject* {
+static auto PyHScrollWidget(PyObject* self, PyObject* args,
+                            PyObject* keywds) -> PyObject* {
   BA_PYTHON_TRY;
 
   PyObject* size_obj{Py_None};
@@ -2067,8 +2067,8 @@ static PyMethodDef PyHScrollWidgetDef = {
 
 // ------------------------------ textwidget -----------------------------------
 
-static auto PyTextWidget(PyObject* self, PyObject* args, PyObject* keywds)
-    -> PyObject* {
+static auto PyTextWidget(PyObject* self, PyObject* args,
+                         PyObject* keywds) -> PyObject* {
   BA_PYTHON_TRY;
   PyObject* size_obj{Py_None};
   PyObject* pos_obj{Py_None};
@@ -2471,8 +2471,8 @@ static PyMethodDef PyTextWidgetDef = {
 
 // ------------------------------- widget --------------------------------------
 
-static auto PyWidgetCall(PyObject* self, PyObject* args, PyObject* keywds)
-    -> PyObject* {
+static auto PyWidgetCall(PyObject* self, PyObject* args,
+                         PyObject* keywds) -> PyObject* {
   BA_PYTHON_TRY;
 
   PyObject* edit_obj{Py_None};
@@ -2685,8 +2685,8 @@ static PyMethodDef PySetPartyWindowOpenDef = {
 
 // -------------------------- get_special_widget -------------------------------
 
-static auto PyGetSpecialWidget(PyObject* self, PyObject* args, PyObject* keywds)
-    -> PyObject* {
+static auto PyGetSpecialWidget(PyObject* self, PyObject* args,
+                               PyObject* keywds) -> PyObject* {
   BA_PYTHON_TRY;
 
   const char* name;
@@ -2764,8 +2764,8 @@ static PyMethodDef PyGetSelectedWidgetDef = {
 
 // ----------------------------- widget_by_id ----------------------------------
 
-static auto PyWidgetByID(PyObject* self, PyObject* args, PyObject* keywds)
-    -> PyObject* {
+static auto PyWidgetByID(PyObject* self, PyObject* args,
+                         PyObject* keywds) -> PyObject* {
   BA_PYTHON_TRY;
 
   const char* id;

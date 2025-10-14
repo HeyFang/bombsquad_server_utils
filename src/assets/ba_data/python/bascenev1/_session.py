@@ -69,7 +69,6 @@ class Session:
     #: The lobby instance where new players go to select a
     #: profile/team/etc. before being added to games. Be aware this value
     #: may be None if a session does not allow any such selection.
-    lobby: bascenev1.Lobby
 
     #: The maximum number of players allowed in the Session.
     max_players: int

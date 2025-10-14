@@ -150,8 +150,8 @@ enum SpazBodyType {
   kHairPonyTailBottomBodyID
 };
 
-static auto AngleBetween2DVectors(dReal x1, dReal y1, dReal x2, dReal y2)
-    -> dReal {
+static auto AngleBetween2DVectors(dReal x1, dReal y1, dReal x2,
+                                  dReal y2) -> dReal {
   dReal x1_norm, y1_norm, x2_norm, y2_norm;
   dReal len1, len2;
   len1 = sqrtf(x1 * x1 + y1 * y1);
@@ -6007,11 +6007,13 @@ void SpazNode::GetRigidBodyPickupLocations(int id, float* obj, float* character,
 }
 void SpazNode::DropHeldObject() {
   if (holding_something_) {
+    // Remove check that pickup_joint_ is alive since it may have been killed
+    // already
     if (hold_node_.exists()) {
-      assert(pickup_joint_.IsAlive());
-      pickup_joint_.Kill();
+      if (pickup_joint_.IsAlive()) {
+        pickup_joint_.Kill();
+      }
     }
-    assert(!pickup_joint_.IsAlive());
 
     holding_something_ = false;
     hold_body_ = 0;

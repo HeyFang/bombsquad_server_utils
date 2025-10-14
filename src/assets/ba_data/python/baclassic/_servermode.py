@@ -22,6 +22,8 @@ from bacommon.servermanager import (
 import babase
 import bascenev1
 
+
+
 if TYPE_CHECKING:
     from typing import Any
 
@@ -114,6 +116,11 @@ class ServerController:
             self._prep_timer = babase.AppTimer(
                 0.25, self._prepare_to_serve, repeat=True
             )
+
+    @property
+    def config(self) -> ServerConfig:
+        """Returns the selected server config."""
+        return self._config
 
     def print_client_list(self) -> None:
         """Print info about all connected clients."""
@@ -428,7 +435,9 @@ class ServerController:
         bascenev1.set_enable_default_kick_voting(
             self._config.enable_default_kick_voting
         )
+        bascenev1.set_enable_admins_kick(self._config.enable_admins_kick)
         bascenev1.set_admins(self._config.admins)
+        bascenev1.set_admin_tokens(self._config.admin_tokens)
 
         # Call set-enabled last (will push state to the cloud).
         bascenev1.set_public_party_max_size(self._config.max_party_size)

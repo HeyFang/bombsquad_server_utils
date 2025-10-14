@@ -107,8 +107,11 @@ class MeteorShowerGame(bs.TeamGameActivity[Player, Team]):
 
     @override
     def on_player_leave(self, player: Player) -> None:
-        # (Pylint Bug?) pylint: disable=missing-function-docstring
+        """Called when a Player leaves the game.
 
+        Args:
+            player: The Player that left the game.
+        """
         # Augment default behavior.
         super().on_player_leave(player)
 
@@ -118,8 +121,14 @@ class MeteorShowerGame(bs.TeamGameActivity[Player, Team]):
     # overriding the default character spawning..
     @override
     def spawn_player(self, player: Player) -> bs.Actor:
-        # (Pylint Bug?) pylint: disable=missing-function-docstring
+        """Create and spawn a player for the game.
 
+        Args:
+            player: The Player to spawn.
+
+        Returns:
+            bs.Actor: The spawned player spaz actor.
+        """
         spaz = self.spawn_player_spaz(player)
 
         # Let's reconnect this player's controls to this
@@ -134,8 +143,16 @@ class MeteorShowerGame(bs.TeamGameActivity[Player, Team]):
 
     # Various high-level game events come through this method.
     @override
+    @override
     def handlemessage(self, msg: Any) -> Any:
-        """Handle a message."""
+        """Handle game messages.
+
+        Args:
+            msg: The message to handle.
+
+        Returns:
+            Variable depending on the message type.
+        """
         if isinstance(msg, bs.PlayerDiedMessage):
             # Augment standard behavior.
             super().handlemessage(msg)
@@ -166,6 +183,11 @@ class MeteorShowerGame(bs.TeamGameActivity[Player, Team]):
         return None
 
     def _check_end_game(self) -> None:
+        """Check if the game should end.
+
+        Ends the game if all players are dead in co-op mode,
+        or if only one team remains in other modes.
+        """
         # We don't want to end this activity more than once.
         if self._ended:
             return
@@ -187,6 +209,12 @@ class MeteorShowerGame(bs.TeamGameActivity[Player, Team]):
                 self.end_game()
 
     def _set_meteor_timer(self) -> None:
+        """Schedule the next meteor bomb cluster drop.
+
+        Sets a timer to drop the next cluster of meteor bombs after a randomized
+        delay based on the current meteor_time value. The actual delay will be
+        between 1.0 and 1.2 times the meteor_time.
+        """
         bs.timer(
             (1.0 + 0.2 * random.random()) * self._meteor_time,
             self._drop_bomb_cluster,
@@ -225,14 +253,31 @@ class MeteorShowerGame(bs.TeamGameActivity[Player, Team]):
     def _drop_bomb(
         self, position: Sequence[float], velocity: Sequence[float]
     ) -> None:
-        Bomb(position=position, velocity=velocity).autoretain()
+        bomb_types = ['land_mine', 'normal', 'sticky', 'ice', 'impact']
+        random_bomb_type = random.choice(bomb_types)
+        bomb = Bomb(
+            position=position, bomb_type=random_bomb_type, velocity=velocity
+        ).autoretain()
+
+        # Only arm land_mine or impact bombs
+        if random_bomb_type in ['land_mine', 'impact']:
+            bomb.arm()
 
     def _decrement_meteor_time(self) -> None:
         self._meteor_time = max(0.01, self._meteor_time * 0.9)
 
     @override
     def end_game(self) -> None:
-        # (Pylint Bug?) pylint: disable=missing-function-docstring
+        """End the game and calculate final scores.
+
+        This method:
+        1. Records final death times for surviving players
+        2. Awards points based on survival duration
+        3. Gives bonus points to survivors
+        4. Stops the game timer
+        5. Calculates team scores based on longest survival time
+        6. Submits final results
+        """
         cur_time = bs.time()
         assert self._timer is not None
         start_time = self._timer.getstarttime()
