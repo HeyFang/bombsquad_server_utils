@@ -16,25 +16,24 @@ namespace ballistica::ui_v1 {
 // Base class for interface widgets.
 class Widget : public Object {
  public:
-  /// Only relevant for direct children of the main stack widget. Note that
-  /// these are bitmask values so that internal root elements can specific
-  /// the entire set of visibilities they apply to.
+  /// Only relevant for direct children of the main stack widget. These are
+  /// bitmask values so that internal root elements can specify the entire
+  /// set of visibilities they apply to.
   enum class ToolbarVisibility : uint16_t {
-    kInherit = 0,             // For popups and whatnot - leave toolbar as-is.
-    kMenuMinimal = 1,         // Menu, squad, back.
-    kMenuMinimalNoBack = 2,   // Menu, squad.
-    kMenuStore = 4,           // Menu, squad, level, and soft currency.
-    kMenuStoreNoBack = 8,     // Menu, squad, level, and soft currency.
-    kMenuReduced = 16,        // Menu, squad, account, inbox, settings, back.
-    kMenuReducedNoBack = 32,  // Menu, squad, account, inbox, settings.
-    kMenuFull = 64,           // Everything.
-    kMenuFullNoBack = 128,    // Everything minus back.
-    kMenuFullRoot = 256,      // Obsolete.
-    kInGame = 512,            // Menu, squad.
-    kGetTokens = 1024,        // Squad, tokens without plus.
-    kMenuInGame = 2048,       // Squad, settings.
-    kMenuTokens = 4096,       // Squad, tokens.
-    kNoMenuMinimal = 8192,    // Squad.
+    kInherit = 0x00,           // For popups and whatnot - leave toolbar as-is.
+    kMenuMinimal = 0x01 << 0,  // Menu, squad, back.
+    kMenuMinimalNoBack = 0x01 << 1,  // Menu, squad.
+    kMenuStore = 0x01 << 2,          // Menu, squad, level, and soft currency.
+    kMenuStoreNoBack = 0x01 << 3,    // Menu, squad, level, and soft currency.
+    kMenuReduced = 0x01 << 4,  // Menu, squad, account, inbox, settings, back.
+    kMenuReducedNoBack = 0x01 << 5,  // Menu, squad, account, inbox, settings.
+    kMenuFull = 0x01 << 6,           // Everything.
+    kMenuFullNoBack = 0x01 << 7,     // Everything minus back.
+    kMenuFullRoot = 0x01 << 8,       // Obsolete.
+    kInGame = 0x01 << 9,             // Menu, squad.
+    kMenuInGame = 0x01 << 10,        // Squad, settings.
+    kMenuTokens = 0x01 << 11,        // Squad, tokens.
+    kNoMenuMinimal = 0x01 << 12,     // Squad.
   };
 
   enum class ToolbarCancelButtonStyle : uint8_t {
@@ -101,23 +100,28 @@ class Widget : public Object {
   virtual auto GetHeight() -> float { return 0.0f; }
 
   /// If this widget is in a container, return it.
-  auto parent_widget() const -> ContainerWidget* { return parent_widget_; }
+  auto parent_widget() const { return parent_widget_; }
 
   /// Return the container_widget containing this widget, or the
   /// owner-widget if there is no parent.
   auto GetOwnerWidget() const -> Widget*;
 
-  auto down_widget() const -> Widget* { return down_widget_.get(); }
+  auto down_widget() const { return down_widget_.get(); }
   void SetDownWidget(Widget* w);
-  auto up_widget() const -> Widget* { return up_widget_.get(); }
+  auto up_widget() const { return up_widget_.get(); }
   void SetUpWidget(Widget* w);
-  auto left_widget() const -> Widget* { return left_widget_.get(); }
+  auto left_widget() const { return left_widget_.get(); }
   void SetLeftWidget(Widget* w);
-  auto right_widget() const -> Widget* { return right_widget_.get(); }
+  auto right_widget() const { return right_widget_.get(); }
   void SetRightWidget(Widget* w);
 
   void set_auto_select(bool enable) { auto_select_ = enable; }
-  auto auto_select() const -> bool { return auto_select_; }
+  auto auto_select() const { return auto_select_; }
+
+  void set_auto_select_toolbars_only(bool enable) {
+    auto_select_toolbars_only_ = enable;
+  }
+  auto auto_select_toolbars_only() const { return auto_select_toolbars_only_; }
 
   void set_allow_preserve_selection(bool val) {
     allow_preserve_selection_ = val;
@@ -292,6 +296,7 @@ class Widget : public Object {
   bool visible_in_container_{true};
   bool neighbors_locked_{};
   bool auto_select_{};
+  bool auto_select_toolbars_only_{};
   bool in_hierarchy_{};
   bool allow_preserve_selection_{true};
 };
