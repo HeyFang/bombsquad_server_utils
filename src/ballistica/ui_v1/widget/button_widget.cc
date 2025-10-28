@@ -20,7 +20,7 @@ ButtonWidget::ButtonWidget()
     : birth_time_millisecs_{
           static_cast<millisecs_t>(g_base->logic->display_time() * 1000.0)} {
   text_ = Object::New<TextWidget>();
-  set_text("Button");
+  SetText("Button");
   text_->SetVAlign(TextWidget::VAlign::kCenter);
   text_->SetHAlign(TextWidget::HAlign::kCenter);
   text_->SetWidth(0.0f);
@@ -35,7 +35,9 @@ void ButtonWidget::SetOnActivateCall(PyObject* call_obj) {
   on_activate_call_ = Object::New<base::PythonContextCall>(call_obj);
 }
 
-void ButtonWidget::set_text(const std::string& text_in) {
+void ButtonWidget::SetTextLiteral(bool val) { text_->SetLiteral(val); }
+
+void ButtonWidget::SetText(const std::string& text_in) {
   std::string text = Utils::GetValidUTF8(text_in.c_str(), "bwst");
   text_->SetText(text);
 
@@ -87,6 +89,7 @@ auto ButtonWidget::GetHeight() -> float { return height_; }
 
 auto ButtonWidget::GetMult(millisecs_t current_time) const -> float {
   float mult = 1.0f;
+
   if ((pressed_ && mouse_over_)
       || (current_time - last_activate_time_millisecs_ < 200)) {
     if (pressed_ && mouse_over_) {
@@ -108,10 +111,10 @@ auto ButtonWidget::GetMult(millisecs_t current_time) const -> float {
       mult *= 2.0f;
     }
   } else {
-    // Slightly highlighting all buttons for mouse-over. Once we can
-    // differentiate between touch events and pointer events we should limit
-    // this to pointer events.
-    if (mouse_over_) {
+    // Slightly highlighting all buttons for idle hovering (but ONLY with a
+    // mouse; not touchscreen).
+    if (mouse_over_ && !g_base->ui->touch_mode()) {
+      // if (mouse_over_) {
       mult = 1.2f;
     }
   }
@@ -228,12 +231,22 @@ void ButtonWidget::Draw(base::RenderPass* pass, bool draw_transparent) {
       base::SimpleComponent c(pass);
       c.SetTransparent(draw_transparent);
 
-      // We currently only support non-1.0 opacity values when using
-      // custom textures and no custom opaque mesh.
-      assert(opacity_ == 1.0f || (texture_.exists() && !mesh_opaque_.exists()));
-
+      // We currently only support non-1.0 opacity values when using custom
+      // textures with no custom opaque mesh.
+      float opacity;
+      if (opacity_ == 1.0f || (texture_.exists() && !mesh_opaque_.exists())) {
+        opacity = opacity_;
+      } else {
+        BA_LOG_ONCE(LogName::kBaUI, LogLevel::kWarning,
+                    "Button opacity < 1.0 only works with custom textures and "
+                    "no opaque meshes.");
+        opacity = 1.0f;
+      }
       c.SetColor(mult * color_red_, mult * color_green_, mult * color_blue_,
-                 opacity_);
+                 opacity);
+      if (flatness_ != 0.0f) {
+        c.SetFlatness(flatness_);
+      }
 
       float l_border, r_border, b_border, t_border;
 

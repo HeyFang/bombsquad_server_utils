@@ -47,11 +47,14 @@ class ButtonWidget : public Widget {
     icon_color_blue_ = b;
     icon_color_alpha_ = a;
   }
+  void set_flatness(float val) { flatness_ = val; }
+
   auto set_text_flatness(float f) { text_flatness_ = f; }
   enum class Style : uint8_t { kRegular, kBack, kBackSmall, kTab, kSquare };
   auto set_style(Style s) { style_ = s; }
   enum class IconType : uint8_t { kNone, kCancel, kStart };
-  void set_text(const std::string& text);
+  void SetTextLiteral(bool val);
+  void SetText(const std::string& text);
   auto text() const -> std::string { return text_->text_raw(); }
   auto set_icon_type(IconType i) { icon_type_ = i; }
   auto set_repeat(bool repeat) { repeat_ = repeat; }
@@ -121,6 +124,7 @@ class ButtonWidget : public Widget {
   float icon_color_alpha_{1.0f};
   float icon_scale_{1.0f};
   float opacity_{1.0f};
+  float flatness_{0.0f};
   float text_flatness_{0.5f};
   float text_color_r_{0.75f};
   float text_color_g_{1.0f};

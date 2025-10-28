@@ -31,7 +31,7 @@
 #error Unknown processor architecture.
 #endif
 
-// #define BA_HAVE_FRAMEWORK_OPENAL 1
+// #define BA_USE_FRAMEWORK_OPENAL 1
 
 #elif __linux__
 
@@ -61,6 +61,7 @@
 
 #if !BA_HEADLESS_BUILD
 #define BA_ENABLE_AUDIO 1
+
 #define BA_ENABLE_OPENGL 1
 #define BA_SDL_BUILD 1
 #define BA_ENABLE_SDL_JOYSTICKS 1
