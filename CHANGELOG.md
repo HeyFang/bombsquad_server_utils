@@ -1,3 +1,13 @@
+### 1.7.54 (build 22604, api 9, 2025-10-29)
+- `scrollwidget` and `hscrollwidget` now center selected items that are too
+  large to fit completely in view instead of unpredictably scrolling to the
+  beginning or end of them. This makes show-buffer values (which effectively
+  make things bigger in the scrollwidget's eyes) more intuitive to use.
+- Added new `button_type` values for `bauiv1.buttonwidget()`: 'small', 'medium',
+  'large', and 'larger'. These correspond to the styles that are normally
+  selected based on button dimensions; you can now choose them explicitly if you
+  like.
+  
 ### 1.7.53 (build 22597, api 9, 2025-10-25)
 - Fixes an issue where deleting player profiles would error.
 - App audio output should now update when the default sound device changes
