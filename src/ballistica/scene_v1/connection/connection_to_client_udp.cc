@@ -2,10 +2,10 @@
 
 #include "ballistica/scene_v1/connection/connection_to_client_udp.h"
 
+#include <functional>  // For std::hash
 #include <string>
 #include <utility>
 #include <vector>
-#include <functional> // For std::hash
 
 #include "ballistica/base/logic/logic.h"
 #include "ballistica/base/networking/network_writer.h"
@@ -26,18 +26,18 @@ ConnectionToClientUDP::ConnectionToClientUDP(const SockAddr& addr,
       last_client_response_time_millisecs_(
           static_cast<millisecs_t>(g_base->logic->display_time() * 1000.0)),
       did_die_(false) {
-        // // 1. Get the IP address string using the correct method from the .h file.
-        // std::string ip_address_str = addr_->AddressString();
+  // // 1. Get the IP address string using the correct method from the .h file.
+  // std::string ip_address_str = addr_->AddressString();
 
-        // // 2. Build ONE single log message string.
-        // std::string log_message = "Client connection: IP=" + ip_address_str
-        //                           + ", UUID=" + client_instance_uuid_;
+  // // 2. Build ONE single log message string.
+  // std::string log_message = "Client connection: IP=" + ip_address_str
+  //                           + ", UUID=" + client_instance_uuid_;
 
-        // // 3. Pass that single string as the 3rd argument to Log().
-        // //    (Using kInfo, as this is informational, not an error).
-        // g_core->logging->Log(LogName::kBaNetworking, LogLevel::kError,
-        //                     log_message);
-      }
+  // // 3. Pass that single string as the 3rd argument to Log().
+  // //    (Using kInfo, as this is informational, not an error).
+  // g_core->logging->Log(LogName::kBaNetworking, LogLevel::kError,
+  //                     log_message);
+}
 
 ConnectionToClientUDP::~ConnectionToClientUDP() {
   // This prevents anything from trying to send

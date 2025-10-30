@@ -2,23 +2,26 @@
 
 import discord
 from discord.ext import commands
-from discord import app_commands # Required for slash commands
+from discord import app_commands  # Required for slash commands
 import socket
 import os
-import json # To format data for sending
+import json  # To format data for sending
 
 
 # --- Configuration ---
 BOT_TOKEN = 'YOUR_DISCORD_BOT_TOKEN_HERE'  # Replace with your actual bot token
-GUILD_ID = YOUR_GUILD_ID_HERE  # Replace with your actual Server ID (as an integer)
+GUILD_ID = 'YOUR_GUILD_ID_HERE'  # Replace with your actual Server ID (as an integer)
 # This *must* match the path the BombSquad server will listen on
-SOCKET_PATH = '/tmp/bombsquad_verify.sock' # Example path in /tmp
+SOCKET_PATH = '/tmp/bombsquad_verify.sock'  # Example path in /tmp
 
 # --- Bot Setup ---
 intents = discord.Intents.default()  # Default intents are usually sufficient
 # You might not need message_content if only using slash commands
 # intents.message_content = True
-bot = commands.Bot(command_prefix='.', intents=intents) # Prefix doesn't matter much for slash commands
+bot = commands.Bot(
+    command_prefix='.', intents=intents
+)  # Prefix doesn't matter much for slash commands
+
 
 # --- Bot Events ---
 @bot.event
@@ -45,15 +48,23 @@ async def on_ready():
     except Exception as e:
         print(f"Error syncing slash commands: {e}")
 
+
 # --- Slash Command ---
-@bot.tree.command(name="verify", description="Verify admin status for the current BombSquad session.")
+@bot.tree.command(
+    name="verify",
+    description="Verify admin status for the current BombSquad session.",
+)
 @app_commands.describe(
     shortname='Your current in-game BombSquad short name (case-sensitive)',
-    client_id='Your current client ID shown in the verification message'
+    client_id='Your current client ID shown in the verification message',
 )
-async def verify(interaction: discord.Interaction, shortname: str, client_id: int):
+async def verify(
+    interaction: discord.Interaction, shortname: str, client_id: int
+):
     """Handles the /verify slash command."""
-    await interaction.response.defer(ephemeral=True) # Acknowledge command privately
+    await interaction.response.defer(
+        ephemeral=True
+    )  # Acknowledge command privately
 
     # --- Unix Socket Communication ---
     try:
@@ -65,11 +76,13 @@ async def verify(interaction: discord.Interaction, shortname: str, client_id: in
         print("Connected to BombSquad server socket.")
 
         # Prepare data to send (e.g., as JSON)
-        data_to_send = json.dumps({
-            'action': 'verify_admin',
-            'client_id': client_id,
-            'shortname': shortname
-        })
+        data_to_send = json.dumps(
+            {
+                'action': 'verify_admin',
+                'client_id': client_id,
+                'shortname': shortname,
+            }
+        )
 
         # Send data
         print(f"Sending verification request: {data_to_send}")
@@ -84,17 +97,32 @@ async def verify(interaction: discord.Interaction, shortname: str, client_id: in
         #    await interaction.followup.send(f"Server reported an issue verifying {shortname} ({client_id}). Details: {response}", ephemeral=True)
 
         # Simple confirmation for now
-        await interaction.followup.send(f"Verification request sent for `{shortname}` (Client ID: `{client_id}`). Check in-game message.", ephemeral=True)
+        await interaction.followup.send(
+            f"Verification request sent for `{shortname}` (Client ID: `{client_id}`). Check in-game message.",
+            ephemeral=True,
+        )
 
     except FileNotFoundError:
-        print(f"Error: Unix socket file not found at {SOCKET_PATH}. Is the BombSquad server running and listening?")
-        await interaction.followup.send("❌ Error: Could not connect to the BombSquad server. Is it running?", ephemeral=True)
+        print(
+            f"Error: Unix socket file not found at {SOCKET_PATH}. Is the BombSquad server running and listening?"
+        )
+        await interaction.followup.send(
+            "❌ Error: Could not connect to the BombSquad server. Is it running?",
+            ephemeral=True,
+        )
     except ConnectionRefusedError:
-         print(f"Error: Connection refused for {SOCKET_PATH}. Is the BombSquad server listening?")
-         await interaction.followup.send("❌ Error: Connection refused by the BombSquad server.", ephemeral=True)
+        print(
+            f"Error: Connection refused for {SOCKET_PATH}. Is the BombSquad server listening?"
+        )
+        await interaction.followup.send(
+            "❌ Error: Connection refused by the BombSquad server.",
+            ephemeral=True,
+        )
     except Exception as e:
         print(f"An error occurred during socket communication: {e}")
-        await interaction.followup.send(f"❌ An unexpected error occurred: {e}", ephemeral=True)
+        await interaction.followup.send(
+            f"❌ An unexpected error occurred: {e}", ephemeral=True
+        )
     finally:
         # Ensure the socket is closed
         if 'client_sock' in locals() and client_sock:
@@ -105,6 +133,8 @@ async def verify(interaction: discord.Interaction, shortname: str, client_id: in
 # --- Run the Bot ---
 if __name__ == "__main__":
     if BOT_TOKEN == 'YOUR_DISCORD_BOT_TOKEN_HERE':
-        print("ERROR: Please replace 'YOUR_DISCORD_BOT_TOKEN_HERE' with your actual bot token in bot.py")
+        print(
+            "ERROR: Please replace 'YOUR_DISCORD_BOT_TOKEN_HERE' with your actual bot token in bot.py"
+        )
     else:
         bot.run(BOT_TOKEN)

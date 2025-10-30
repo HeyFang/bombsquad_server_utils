@@ -23,7 +23,6 @@ import babase
 import bascenev1
 
 
-
 if TYPE_CHECKING:
     from typing import Any
 

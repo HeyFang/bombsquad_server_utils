@@ -6,12 +6,14 @@
 
 # ---- DISCORD SETTINGS ----
 # Still in development and may have bugs, avoid using for now if not necessary... ill update it soon :>
-enableDiscordAdminAuth: bool = False
+# Add bot token and guild ID in Discord/bot.py if using Discord integration
 enableDiscordIntegration: bool = False
+enableDiscordAdminAuth: bool = False
 
 # ---- IP AUTH SETTINGS ----
 enableIpAuth: bool = False
+# ips are stored in hash form for privacy :>
 authorizedAdminIPs: list[str] = [
     "17126921592780111236",  # Fang
-    "5738055069092261189",   # another admin
+    "5738055069092261189",  # another admin
 ]

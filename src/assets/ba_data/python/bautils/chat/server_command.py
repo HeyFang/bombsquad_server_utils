@@ -118,9 +118,7 @@ class ServerCommand(ABC):
     def is_admin(self) -> bool:
         "Returns True if the client is an admin."
         player = self.get_session_player(self.client_id)
-        if (
-            player.get_v1_account_id() in self.serverconfig.admins
-        ):
+        if player.get_v1_account_id() in self.serverconfig.admins:
             return True
         return False
 

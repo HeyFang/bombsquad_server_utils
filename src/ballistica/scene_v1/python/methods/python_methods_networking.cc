@@ -762,13 +762,15 @@ static PyObject* PyGetClientIPAddress(PyObject* self, PyObject* args,
       appmode->connections()->connections_to_clients().find(client_id)};
 
   // Does this connection exist?
-  if (connection_iter == appmode->connections()->connections_to_clients().end()) {
-    Py_RETURN_NONE; // No connection found for this client_id
+  if (connection_iter
+      == appmode->connections()->connections_to_clients().end()) {
+    Py_RETURN_NONE;  // No connection found for this client_id
   }
 
   // Connections should always be valid refs.
   assert(connection_iter->second.exists());
-  ConnectionToClient* connection = connection_iter->second.get(); // Get the raw pointer
+  ConnectionToClient* connection =
+      connection_iter->second.get();  // Get the raw pointer
 
   // Call the C++ method we added earlier
   std::string ip_address = connection->GetClientIPAddress();
@@ -784,9 +786,9 @@ static PyObject* PyGetClientIPAddress(PyObject* self, PyObject* args,
 }
 
 static PyMethodDef PyGetClientIPAddressDef = {
-    "get_client_ip_address",             // name
-    (PyCFunction)PyGetClientIPAddress,   // method
-    METH_VARARGS | METH_KEYWORDS,        // flags
+    "get_client_ip_address",            // name
+    (PyCFunction)PyGetClientIPAddress,  // method
+    METH_VARARGS | METH_KEYWORDS,       // flags
 
     "get_client_ip_address(client_id: int) -> str | None\n"
     "\n"
@@ -1043,7 +1045,6 @@ auto PythonMethodsNetworking::GetMethods() -> std::vector<PyMethodDef> {
       PyGetChatMessagesDef,
   };
 }
-
 
 #pragma clang diagnostic pop
 

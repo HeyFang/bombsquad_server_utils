@@ -4,7 +4,7 @@
 
 # ba_meta require api 9
 
-#print("!!! LOADING discord_verify_server.py !!!")
+# print("!!! LOADING discord_verify_server.py !!!")
 # Add these imports at the top
 import socket
 import threading
@@ -16,10 +16,14 @@ import babase as ba
 try:
     from .. import settings
 except ImportError:
-    print("\nERROR: discord_verify_server.py could not import settings.py."
-          " Discord integration will be disabled.")
+    print(
+        "\nERROR: discord_verify_server.py could not import settings.py."
+        " Discord integration will be disabled."
+    )
+
     class DummySettings:
         enableDiscordIntegration = False
+
     settings = DummySettings()
 
 # Make sure this import points to your CommandManager class
@@ -29,26 +33,27 @@ try:
 except ImportError:
     print("ERROR: Could not import CommandManager for Unix socket server.")
     # Handle the error appropriately - maybe disable the feature
-    CommandManager = None # Prevent crashes later
+    CommandManager = None  # Prevent crashes later
 
 
 # MUST match the path used in your Discord bot
 SOCKET_PATH = '/tmp/bombsquad_verify.sock'
 
+
 def handle_socket_connection(client_sock: socket.socket) -> None:
     """Handles a single connection from the Discord bot."""
-    #print(f"Socket Server: Connection received from bot.")
+    # print(f"Socket Server: Connection received from bot.")
     data_buffer = b''
     try:
         # Receive data in chunks (basic example, might need refinement for large messages)
         while True:
             chunk = client_sock.recv(1024)
             if not chunk:
-                break # Connection closed by client
+                break  # Connection closed by client
             data_buffer += chunk
             # Basic check: assume a complete JSON message ends with '}'
             if data_buffer.endswith(b'}'):
-                 break
+                break
 
         if not data_buffer:
             print("Socket Server: Received empty data. Closing connection.")
@@ -56,7 +61,7 @@ def handle_socket_connection(client_sock: socket.socket) -> None:
 
         # Decode and parse the JSON data
         message = data_buffer.decode('utf-8')
-        #print(f"Socket Server: Received raw data: {message}")
+        # print(f"Socket Server: Received raw data: {message}")
         data = json.loads(message)
 
         # Process the request
@@ -64,10 +69,14 @@ def handle_socket_connection(client_sock: socket.socket) -> None:
         client_id = data.get('client_id')
         shortname = data.get('shortname')
 
-        response = "ERROR: Invalid request" # Default response
+        response = "ERROR: Invalid request"  # Default response
 
-        if action == 'verify_admin' and isinstance(client_id, int) and isinstance(shortname, str):
-            #print(f"Socket Server: Processing verify_admin for client_id={client_id}, shortname='{shortname}'")
+        if (
+            action == 'verify_admin'
+            and isinstance(client_id, int)
+            and isinstance(shortname, str)
+        ):
+            # print(f"Socket Server: Processing verify_admin for client_id={client_id}, shortname='{shortname}'")
 
             # --- CRITICAL: Use ba.pushcall to interact with BombSquad ---
             # We define a helper function to run in the main thread
@@ -75,17 +84,19 @@ def handle_socket_connection(client_sock: socket.socket) -> None:
             # FIXME: thread still running at python shutdown!
             def _verify_in_main_thread():
                 if CommandManager:
-                    success = CommandManager.mark_admin_verified(client_id, shortname)
+                    success = CommandManager.mark_admin_verified(
+                        client_id, shortname
+                    )
                     # We can't easily get the 'success' bool back to *this* thread
                     # So we just assume success if the call is made for the response
                     # A more complex setup could use queues or callbacks
                 else:
                     print("Socket Server Error: CommandManager not imported.")
-            
+
             ba.pushcall(_verify_in_main_thread, from_other_thread=True)
 
-            response = "OK" # Assume OK for now (simplest response)
-            #print(f"Socket Server: Verification pushed to main thread for client_id={client_id}.")
+            response = "OK"  # Assume OK for now (simplest response)
+            # print(f"Socket Server: Verification pushed to main thread for client_id={client_id}.")
 
         else:
             print(f"Socket Server: Invalid action or data received: {data}")
@@ -96,16 +107,20 @@ def handle_socket_connection(client_sock: socket.socket) -> None:
         print(f"Socket Server: Sent response '{response}' to bot.")
 
     except json.JSONDecodeError:
-        print(f"Socket Server: Error decoding JSON: {data_buffer.decode('utf-8', errors='ignore')}")
+        print(
+            f"Socket Server: Error decoding JSON: {data_buffer.decode('utf-8', errors='ignore')}"
+        )
         client_sock.sendall(b"ERROR: Invalid JSON")
     except ConnectionResetError:
-         print("Socket Server: Connection reset by peer.")
+        print("Socket Server: Connection reset by peer.")
     except Exception as e:
         print(f"Socket Server: Error handling connection: {e}")
         try:
-            client_sock.sendall(f"ERROR: Server exception - {type(e).__name__}".encode('utf-8'))
+            client_sock.sendall(
+                f"ERROR: Server exception - {type(e).__name__}".encode('utf-8')
+            )
         except:
-             pass # Ignore errors sending error message back
+            pass  # Ignore errors sending error message back
     finally:
         print("Socket Server: Closing client connection.")
         client_sock.close()
@@ -115,8 +130,10 @@ def start_unix_socket_server() -> None:
     """Creates and runs the Unix Domain Socket server loop."""
     # Ensure CommandManager was imported
     if not CommandManager:
-         print("Unix Socket Server cannot start: CommandManager failed to import.")
-         return
+        print(
+            "Unix Socket Server cannot start: CommandManager failed to import."
+        )
+        return
 
     # Cleanup existing socket file if it exists
     if os.path.exists(SOCKET_PATH):
@@ -141,28 +158,30 @@ def start_unix_socket_server() -> None:
 
         while True:
             # Wait for a connection
-            #print("Socket Server: Waiting for connection...")
+            # print("Socket Server: Waiting for connection...")
             try:
-                 client_connection, client_address = server_sock.accept()
-                 # Handle each connection in a new thread so we can accept others
-                 # Use daemon=True so these threads don't block server exit
-                 handler_thread = threading.Thread(
-                     target=handle_socket_connection,
-                     args=(client_connection,),
-                     daemon=True
-                 )
-                 handler_thread.start()
+                client_connection, client_address = server_sock.accept()
+                # Handle each connection in a new thread so we can accept others
+                # Use daemon=True so these threads don't block server exit
+                handler_thread = threading.Thread(
+                    target=handle_socket_connection,
+                    args=(client_connection,),
+                    daemon=True,
+                )
+                handler_thread.start()
             except ConnectionAbortedError:
-                 print("Socket Server: Accept loop aborted (server likely shutting down).")
-                 break # Exit loop if socket is closed externally
+                print(
+                    "Socket Server: Accept loop aborted (server likely shutting down)."
+                )
+                break  # Exit loop if socket is closed externally
             except Exception as e:
-                 print(f"Socket Server: Error accepting connection: {e}")
-                 # Maybe add a small sleep here to prevent spamming errors
+                print(f"Socket Server: Error accepting connection: {e}")
+                # Maybe add a small sleep here to prevent spamming errors
 
     except OSError as e:
-         print(f"Socket Server: Failed to bind or listen on {SOCKET_PATH}: {e}")
+        print(f"Socket Server: Failed to bind or listen on {SOCKET_PATH}: {e}")
     except Exception as e:
-         print(f"Socket Server: Unexpected error in server loop: {e}")
+        print(f"Socket Server: Unexpected error in server loop: {e}")
     finally:
         # Cleanup the socket file when the server loop ends/crashes
         print("Socket Server: Shutting down and cleaning up socket file.")
@@ -171,7 +190,10 @@ def start_unix_socket_server() -> None:
             try:
                 os.unlink(SOCKET_PATH)
             except OSError as e:
-                print(f"Socket Server: Error removing socket file on shutdown: {e}")
+                print(
+                    f"Socket Server: Error removing socket file on shutdown: {e}"
+                )
+
 
 # --- Starting the Server Thread ---
 
@@ -181,12 +203,18 @@ def start_unix_socket_server() -> None:
 # --- CONDITIONAL THREAD START ---
 # Check the setting from the imported settings module
 if getattr(settings, 'enableDiscordIntegration', False):
-    print("Discord integration enabled in settings. Starting Unix Socket Server thread...")
-    socket_server_thread = threading.Thread(target=start_unix_socket_server, daemon=True)
+    print(
+        "Discord integration enabled in settings. Starting Unix Socket Server thread..."
+    )
+    socket_server_thread = threading.Thread(
+        target=start_unix_socket_server, daemon=True
+    )
     socket_server_thread.start()
     print("Unix Socket Server thread started.")
 else:
-    print("Discord integration disabled in settings. Unix Socket Server will not start.")
+    print(
+        "Discord integration disabled in settings. Unix Socket Server will not start."
+    )
 # --------------------------------
 
 # --- Optional: Cleanup on Server Exit ---
