@@ -25,6 +25,9 @@ class ConnectionToClient : public Connection {
 
   // More efficient than dynamic_cast (hmm do we still want this?).
   virtual auto GetAsUDP() -> ConnectionToClientUDP*;
+  // Returns a unique ID for the client instance, if available.
+  virtual auto GetClientInstanceUUID() const -> std::string;
+  virtual auto GetClientIPAddress() const -> std::string;
   void SetController(ClientControllerInterface* c);
   auto GetPlayerProfiles() const -> PyObject* { return player_profiles_.get(); }
   auto build_number() const -> int { return build_number_; }

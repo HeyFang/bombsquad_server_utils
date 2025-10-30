@@ -743,6 +743,59 @@ static PyMethodDef PyGetClientPublicDeviceUUIDDef = {
     "periodically with updates to the game or operating system.",
 };
 
+// ----------------------- get_client_ip_address -----------------------------
+
+static PyObject* PyGetClientIPAddress(PyObject* self, PyObject* args,
+                                      PyObject* keywds) {
+  BA_PYTHON_TRY;
+  int client_id;
+  static const char* kwlist[] = {"client_id", nullptr};
+  if (!PyArg_ParseTupleAndKeywords(args, keywds, "i",
+                                   const_cast<char**>(kwlist), &client_id)) {
+    return nullptr;
+  }
+  // Error if we're not in our app-mode.
+  auto* appmode = classic::ClassicAppMode::GetActiveOrThrow();
+
+  // Find the connection associated with the client_id
+  auto&& connection_iter{
+      appmode->connections()->connections_to_clients().find(client_id)};
+
+  // Does this connection exist?
+  if (connection_iter == appmode->connections()->connections_to_clients().end()) {
+    Py_RETURN_NONE; // No connection found for this client_id
+  }
+
+  // Connections should always be valid refs.
+  assert(connection_iter->second.exists());
+  ConnectionToClient* connection = connection_iter->second.get(); // Get the raw pointer
+
+  // Call the C++ method we added earlier
+  std::string ip_address = connection->GetClientIPAddress();
+
+  // Return the result as a Python string, or None if empty/NA
+  if (ip_address.empty() || ip_address == "N/A") {
+    Py_RETURN_NONE;
+  } else {
+    return PyUnicode_FromString(ip_address.c_str());
+  }
+
+  BA_PYTHON_CATCH;
+}
+
+static PyMethodDef PyGetClientIPAddressDef = {
+    "get_client_ip_address",             // name
+    (PyCFunction)PyGetClientIPAddress,   // method
+    METH_VARARGS | METH_KEYWORDS,        // flags
+
+    "get_client_ip_address(client_id: int) -> str | None\n"
+    "\n"
+    "(internal)\n"
+    "\n"
+    "Return the IP address string for a connected client.\n"
+    "Returns None if the client_id is invalid or the IP cannot be determined.",
+};
+
 // ----------------------------- get_game_port ---------------------------------
 
 static auto PyGetGamePort(PyObject* self, PyObject* args) -> PyObject* {
@@ -967,6 +1020,7 @@ auto PythonMethodsNetworking::GetMethods() -> std::vector<PyMethodDef> {
       PyDisconnectFromHostDef,
       PyDisconnectClientDef,
       PyGetClientPublicDeviceUUIDDef,
+      PyGetClientIPAddressDef,
       PyGetConnectionToHostInfoDef,
       PyGetConnectionToHostInfo2Def,
       PyClientInfoQueryResponseDef,
@@ -989,6 +1043,7 @@ auto PythonMethodsNetworking::GetMethods() -> std::vector<PyMethodDef> {
       PyGetChatMessagesDef,
   };
 }
+
 
 #pragma clang diagnostic pop
 

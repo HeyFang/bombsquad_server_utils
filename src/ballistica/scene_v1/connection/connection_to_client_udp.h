@@ -27,6 +27,8 @@ class ConnectionToClientUDP : public ConnectionToClient {
   void Die();
   void SendDisconnectRequest();
   void SendGamePacketCompressed(const std::vector<uint8_t>& data) override;
+  auto GetClientInstanceUUID() const -> std::string override;
+  auto GetClientIPAddress() const -> std::string override;
   auto addr() { return *addr_; }
 
  private:

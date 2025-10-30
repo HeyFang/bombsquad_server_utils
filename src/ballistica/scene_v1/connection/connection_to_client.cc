@@ -27,9 +27,12 @@
 #include "ballistica/shared/generic/json.h"
 #include "ballistica/shared/generic/utils.h"
 #include "ballistica/shared/python/python.h"
+#include <fstream>  // For file read/write
+#include <mutex>    // For file locking
 
 namespace ballistica::scene_v1 {
 
+  static std::mutex g_player_log_mutex;  // For safe file access
 // How long new clients have to wait before starting a kick vote.
 const int kNewClientKickVoteDelay = 60000;
 
@@ -876,103 +879,310 @@ void ConnectionToClient::HandleMasterServerClientInfo(PyObject* info_obj) {
   }
   got_info_from_master_server_ = true;
 
-  g_core->logging->Log(LogName::kBaNetworking, LogLevel::kError, [this] {
-    std::string info = "\n=== NEW PLAYER CONNECTED - FULL DUMP ===\n";
+  // g_core->logging->Log(LogName::kBaNetworking, LogLevel::kError, [this] {
+  //   std::string info = "\n=== NEW PLAYER CONNECTED - FULL DUMP ===\n";
 
-    // Basic connection info
-    info += "Display Name: " + peer_spec().GetDisplayString() + "\n";
-    info += "Short Name: " + peer_spec().GetShortName() + "\n";
-    info += "Client ID: " + std::to_string(id_) + "\n";
-    info += "Protocol Version: " + std::to_string(protocol_version()) + "\n";
-    info += "Build Number: " + std::to_string(build_number_) + "\n";
+  //   // Basic connection info
+  //   info += "Display Name: " + peer_spec().GetDisplayString() + "\n";
+  //   info += "Short Name: " + peer_spec().GetShortName() + "\n";
+  //   info += "Client ID: " + std::to_string(id_) + "\n";
+  //   info += "Protocol Version: " + std::to_string(protocol_version()) + "\n";
+  //   info += "Build Number: " + std::to_string(build_number_) + "\n";
 
-    // Device & Authentication info
-    info += "Public Device ID: " + public_device_id_ + "\n";
-    info += "Token: " + token_ + "\n";
-    info += "Peer Hash: " + peer_hash_ + "\n";
-    info += "Got Client Info: " + std::string(got_client_info_ ? "Yes" : "No")
-            + "\n";
-    info += "Got Master Server Info: "
-            + std::string(got_info_from_master_server_ ? "Yes" : "No") + "\n";
-    info += "Is Admin: " + std::string(IsAdmin() ? "Yes" : "No") + "\n";
-    info += "Public Account ID: " + peer_public_account_id_ + "\n";
+  //   // Device & Authentication info
+  //   info += "Public Device ID: " + public_device_id_ + "\n";
+  //   info += "Token: " + token_ + "\n";
+  //   info += "Peer Hash: " + peer_hash_ + "\n";
+  //   info += "Got Client Info: " + std::string(got_client_info_ ? "Yes" : "No")
+  //           + "\n";
+  //   info += "Got Master Server Info: "
+  //           + std::string(got_info_from_master_server_ ? "Yes" : "No") + "\n";
+  //   info += "Is Admin: " + std::string(IsAdmin() ? "Yes" : "No") + "\n";
+  //   info += "Public Account ID: " + peer_public_account_id_ + "\n";
 
-    // Peer Spec Raw Data
-    info += "\n--- PEER SPEC RAW DATA ---\n";
-    info += "Spec String: " + peer_spec().GetSpecString() + "\n";
-    info += "Combined Spec: " + GetCombinedSpec().GetSpecString() + "\n";
+  //   // Peer Spec Raw Data
+  //   info += "\n--- PEER SPEC RAW DATA ---\n";
+  //   info += "Spec String: " + peer_spec().GetSpecString() + "\n";
+  //   info += "Combined Spec: " + GetCombinedSpec().GetSpecString() + "\n";
 
-    // Client State
-    info += "\n--- CLIENT STATE ---\n";
-    info += "Can Communicate: " + std::string(can_communicate() ? "Yes" : "No")
-            + "\n";
-    info += "Is Errored: " + std::string(errored() ? "Yes" : "No") + "\n";
-    info += "Creation Time: " + std::to_string(creation_time()) + "\n";
-    info += "Last Handshake Time: " + std::to_string(last_hand_shake_send_time_)
-            + "\n";
-    info += "Handshake Salt: " + our_handshake_salt_ + "\n";
-    info += "Next Kick Vote Time: " + std::to_string(next_kick_vote_allow_time_)
-            + "\n";
+  //   // Client State
+  //   info += "\n--- CLIENT STATE ---\n";
+  //   info += "Can Communicate: " + std::string(can_communicate() ? "Yes" : "No")
+  //           + "\n";
+  //   info += "Is Errored: " + std::string(errored() ? "Yes" : "No") + "\n";
+  //   info += "Creation Time: " + std::to_string(creation_time()) + "\n";
+  //   info += "Last Handshake Time: " + std::to_string(last_hand_shake_send_time_)
+  //           + "\n";
+  //   info += "Handshake Salt: " + our_handshake_salt_ + "\n";
+  //   info += "Next Kick Vote Time: " + std::to_string(next_kick_vote_allow_time_)
+  //           + "\n";
 
-    // Chat State
-    info += "\n--- CHAT STATE ---\n";
-    info += "Chat Block Time: " + std::to_string(chat_block_time_) + "\n";
-    info += "Next Chat Block Seconds: "
-            + std::to_string(next_chat_block_seconds_) + "\n";
-    info +=
-        "Recent Chat Count: " + std::to_string(last_chat_times_.size()) + "\n";
+  //   // Chat State
+  //   info += "\n--- CHAT STATE ---\n";
+  //   info += "Chat Block Time: " + std::to_string(chat_block_time_) + "\n";
+  //   info += "Next Chat Block Seconds: "
+  //           + std::to_string(next_chat_block_seconds_) + "\n";
+  //   info +=
+  //       "Recent Chat Count: " + std::to_string(last_chat_times_.size()) + "\n";
 
-    // Player Profiles
-    info += "\n--- PLAYER PROFILES ---\n";
-    info += "Has Profiles: "
-            + std::string(player_profiles_.exists() ? "Yes" : "No") + "\n";
+  //   // Player Profiles
+  //   info += "\n--- PLAYER PROFILES ---\n";
+  //   info += "Has Profiles: "
+  //           + std::string(player_profiles_.exists() ? "Yes" : "No") + "\n";
 
-    info += "\n=== END FULL DUMP ===\n";
-    return info;
-  });
+  //   info += "\n=== END FULL DUMP ===\n";
+  //   return info;
+ // ===================================================================
+  // == START: JSON PLAYER LOGGING LOGIC (PBID+DEVICEID UNIQUE ARRAY) ==
+  // ===================================================================
+  {
+    // Lock the file to prevent race conditions from simultaneous joins
+    std::lock_guard<std::mutex> lock(g_player_log_mutex);
 
+    const std::string kPlayerLogFile = "ba_data/python/bautils/players/player_log.json";
+
+    // --- Get the key fields for the current player ---
+    std::string current_pb_id = peer_public_account_id_;
+    std::string current_device_id = public_device_id_; // Get the current device ID
+
+    // If they don't have a pb-id (guest account?), we still skip logging.
+    if (current_pb_id.empty()) {
+      g_core->logging->Log(LogName::kBaNetworking, LogLevel::kWarning,
+                           "Player has no public_account_id; skipping JSON log.");
+    } else {
+
+      // 1. Read existing log file (still an array internally)
+      cJSON* root_array = nullptr;
+      std::ifstream infile(kPlayerLogFile);
+      // ... (File reading is the same) ...
+      if (infile.good()) {
+        std::string file_contents((std::istreambuf_iterator<char>(infile)),
+                                  std::istreambuf_iterator<char>());
+        infile.close();
+        if (!file_contents.empty()) {
+          root_array = cJSON_Parse(file_contents.c_str());
+        }
+      } else {
+        infile.close();
+      }
+
+      // If file doesn't exist, is empty, or is invalid, create a new ARRAY
+      if (!root_array || !cJSON_IsArray(root_array)) {
+        if (root_array) {
+          cJSON_Delete(root_array);
+        }
+        root_array = cJSON_CreateArray();
+      }
+
+      // 2. Find if this player+device combo already exists in the array
+      int match_index = -1;
+      int array_size = cJSON_GetArraySize(root_array);
+      for (int i = 0; i < array_size; ++i) {
+        cJSON* item = cJSON_GetArrayItem(root_array, i);
+        cJSON* existing_pb_id_json =
+            cJSON_GetObjectItem(item, "public_account_id");
+        cJSON* existing_device_id_json =
+            cJSON_GetObjectItem(item, "public_device_id"); // Get existing device ID
+
+        // Check if both fields exist and are strings
+        if (existing_pb_id_json && cJSON_IsString(existing_pb_id_json) &&
+            existing_device_id_json && cJSON_IsString(existing_device_id_json)) {
+            
+          std::string existing_pb_id(existing_pb_id_json->valuestring);
+          std::string existing_device_id(existing_device_id_json->valuestring);
+
+          // *** Check if BOTH pb_id AND device_id match ***
+          if (existing_pb_id == current_pb_id && existing_device_id == current_device_id) {
+            match_index = i;
+            break; // Found a match, stop searching
+          }
+        }
+      }
+
+      // 3. Create the *internal* player data object
+      cJSON* player_obj = cJSON_CreateObject();
+      cJSON_AddStringToObject(player_obj, "public_account_id", current_pb_id.c_str());
+      cJSON_AddStringToObject(player_obj, "public_device_id", current_device_id.c_str()); // Ensure device_id is included
+      cJSON_AddStringToObject(player_obj, "player_ip", GetClientIPAddress().c_str());
+      cJSON_AddStringToObject(player_obj, "display_name", peer_spec().GetDisplayString().c_str());
+      cJSON_AddStringToObject(player_obj, "short_name", peer_spec().GetShortName().c_str()); // Add short_name back if needed
+      cJSON_AddNumberToObject(player_obj, "build_number", build_number_);
+      cJSON_AddStringToObject(player_obj, "token", token_.c_str());
+
+      // 4. Add or Replace the entry in the *internal* array based on match_index
+      if (match_index != -1) {
+        // Update existing entry at match_index
+        cJSON_ReplaceItemInArray(root_array, match_index, player_obj);
+      } else {
+        // Add as a new entry
+        cJSON_AddItemToArray(root_array, player_obj);
+      }
+
+      // 5. Build the *final output array* and add the index to each item
+      cJSON* final_output_array = cJSON_CreateArray();
+      array_size = cJSON_GetArraySize(root_array); // Get size again after potential add/replace
+      for (int i = 0; i < array_size; ++i) {
+          cJSON* internal_item = cJSON_GetArrayItem(root_array, i);
+          cJSON* output_item = cJSON_Duplicate(internal_item, 1); // Deep copy
+          if (output_item) {
+             // Add the 1-based index (checking shouldn't be needed, but safe)
+             if (!cJSON_HasObjectItem(output_item,"index")) {
+                 cJSON_AddNumberToObject(output_item, "index", i + 1);
+             }
+             cJSON_AddItemToArray(final_output_array, output_item);
+          } else {
+             g_core->logging->Log(LogName::kBaNetworking, LogLevel::kError,
+                                  "Failed to duplicate JSON object for player log index.");
+             cJSON_AddItemToArray(final_output_array, cJSON_CreateObject());
+          }
+      }
+
+      // 6. Write the final formatted array back to file
+      char* json_string = cJSON_Print(final_output_array);
+      std::ofstream outfile(kPlayerLogFile);
+      if (outfile.good()) {
+        outfile << json_string;
+        outfile.close();
+      }
+      free(json_string);
+
+      // 7. Clean up both JSON structures
+      cJSON_Delete(root_array);
+      cJSON_Delete(final_output_array);
+    }
+  }
+  // ===================================================================
+  // == END: JSON PLAYER LOGGING LOGIC (PBID+DEVICEID UNIQUE ARRAY) ==
+  // ===================================================================
+
+
+  //});
+
+
+  
   // ===================================================================
   // == START: NEW ADMIN TOKEN VERIFICATION LOGIC ==
   // ===================================================================
 
   // After getting their info, check if they are an admin.
-  if (IsAdmin()) {
-    // **HARDCODED ADMIN TOKEN LIST**
-    // Add your secret admin tokens here.
-    const auto valid_admin_tokens = appmode->admin_tokens();
-
-    // Now check if the token this client provided is in our valid list.
-    if (valid_admin_tokens.find(token_) == valid_admin_tokens.end()) {
-      // If the token is NOT found in the list, it's invalid.
-      // Ban and kick the user.
-      g_core->logging->Log(
-          LogName::kBaNetworking, LogLevel::kWarning,
-          "Admin '" + peer_spec().GetShortName() + "' is imposter, kicking.");
-
-      g_base->ScreenMessage(
-          peer_spec().GetShortName() + " is an imposter, kicking!",
-          {0.5f, 1, 0.5f});
-
-      SendScreenMessage(
-          "{\"t\":[\"serverResponses\","
-          "\"Spoofed pb-id detected, did not match V2 id.\"]}",
-          1, 0, 0);
-
-      // Ban them for 5 minutes to prevent spamming.
-      appmode->BanPlayer(peer_spec(), 1000 * 60 * 5);
-      Error("");  // Disconnect the client.
-      return;     // IMPORTANT: Stop further processing for this client.
-    } else {
-      // Optional: Log successful admin connection for auditing.
-      g_core->logging->Log(
-          LogName::kBaNetworking, LogLevel::kWarning,
-          peer_spec().GetShortName() + "' connected successfully.");
-    }
-  }
-
   // ===================================================================
-  // == END: NEW ADMIN TOKEN VERIFICATION LOGIC ==
+  // == START: MULTI-FACTOR ADMIN VERIFICATION LOGIC ==
   // ===================================================================
+
+  // Structure to hold hardcoded verification data (Display Name and Device ID).
+//   struct AdminDeviceProfile {
+//       std::string short_name;
+//       std::string public_device_id;
+//   };
+
+//   // CRITICAL: Hardcoded map for Display Name and Public Device ID verification.
+//   // Keyed by the Public Account ID (pb-ID) which is already known to be an admin.
+//   static const std::map<std::string, AdminDeviceProfile> kTrustedAdminDevices = {
+//       //
+//       // === START ADMIN ENTRIES HERE ===
+//       //
+      
+//       // **Admin: Aldee**
+//       // Public Account ID: pb-IF49URUALQ==
+//       {"pb-IF49URUALQ==",  // Public Account ID (Key)
+//           {"Aldee",                                                 // Genuine Display Name
+//           "e9279a2f7fc795e37f314427747bc52a3ea86158"}},             // Genuine Public Device ID
+      
+//       // dk
+//       {"pb-IF4wP3I_",
+//           {"ItzDk",
+//           "9f00c5502f8c1abf10b3e5c91efb6af15c455b7b"}},
+      
+//       // termi
+//       {"pb-IF5WB2Yz",
+//           {"Terminat10",
+//           "9d390b2892cd7a468bfc9b971a375ebf8e17610b"}},
+      
+//       // fang
+//       {"pb-IF4FP0co",
+//           {"HeyFang",
+//           "b37790f587a170152f952e2f59d353e11e12a956"}},
+      
+//       // **Admin: (Example 2)**
+//       /*
+//       {"pb-OTHERADMINID==",  // Public Account ID (Key)
+//           {"CoolAdmin",                                             // Genuine Display Name
+//           "c0f38b19d2a1b3c4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0"}},     // Genuine Public Device ID
+//       */
+      
+//       //
+//       // === END ADMIN ENTRIES HERE ===
+//       //
+//   };
+
+//   // Check if their Public Account ID is in the admin list (using IsAdmin() which checks config).
+//   if (IsAdmin()) {
+//       // We already know this client is *claiming* to be an admin (IsAdmin() passed).
+
+//       // 1. Check the configured Token list (existing logic)
+//       const auto valid_admin_tokens = appmode->admin_tokens();
+//       bool is_token_match = (valid_admin_tokens.find(token_) != valid_admin_tokens.end());
+      
+//       // 2. Check the hardcoded Display Name and Device ID
+//       auto it = kTrustedAdminDevices.find(peer_public_account_id_);
+//       bool is_hardcoded_profile_found = (it != kTrustedAdminDevices.end());
+      
+//       // Assume failure if no hardcoded profile is found for the admin ID
+//       bool is_short_name_match = false;
+//       bool is_device_id_match = false;
+
+//       if (is_hardcoded_profile_found) {
+//           const AdminDeviceProfile& trusted_profile = it->second;
+//           is_short_name_match = (peer_spec().GetShortName() == trusted_profile.short_name); 
+//           is_device_id_match = (public_device_id_ == trusted_profile.public_device_id);
+//       }
+
+//       // Check if the overall verification fails (token OR short name OR device ID mismatch)
+//       if (!is_token_match || !is_short_name_match || !is_device_id_match) {
+          
+//           // Spoofer or Mismatch Detected
+          
+//           // Log the failure details
+//           std::string failure_details = "FAILED ADMIN VERIFICATION: ";
+//           if (!is_token_match) {
+//               failure_details += "Token Mismatch (Config); ";
+//           }
+//           if (!is_short_name_match) {
+//               failure_details += "Short Name Mismatch (Hardcoded); ";
+//           }
+//           if (!is_device_id_match) {
+//               failure_details += "Device ID Mismatch (Hardcoded); ";
+//           }
+//           if (!is_hardcoded_profile_found) {
+//               failure_details += "No Hardcoded Profile Found; ";
+//           }
+
+//           g_core->logging->Log(
+//               LogName::kBaNetworking, LogLevel::kWarning,
+//               "Admin '" + peer_spec().GetShortName() + "' failed multi-factor check. " + failure_details);
+
+        
+//           // Announce the action to ALL connected users (Host and Clients)
+//           std::string ban_message = peer_spec().GetShortName() + " is an imposter, banned.";
+
+//           // 1. Send to all clients
+//           appmode->connections()->SendScreenMessageToAll(ban_message, 1.0f, 0.0f, 0.0f);
+
+//           // Ban them for 3 hours (1000 ms * 60 sec * 60 min * 3 hr)
+//           appmode->BanPlayer(peer_spec(), 1000 * 60 * 60 * 3);
+//           Error("");  // Disconnect the client.
+//           return;     // IMPORTANT: Stop further processing for this client.
+//       } else {
+//           // All checks passed
+//           g_core->logging->Log(
+//               LogName::kBaNetworking, LogLevel::kWarning,
+//               peer_spec().GetShortName() + " connected successfully (Multi-Factor Verified).");
+//       }
+//   }
+
+//   // ===================================================================
+//   // == END: MULTI-FACTOR ADMIN VERIFICATION LOGIC ==
+//   // ===================================================================
 }
 
 auto ConnectionToClient::IsAdmin() const -> bool {
@@ -984,4 +1194,15 @@ auto ConnectionToClient::IsAdmin() const -> bool {
           != appmode->admin_public_ids().end());
 }
 
-}  // namespace ballistica::scene_v1
+auto ConnectionToClient::GetClientInstanceUUID() const -> std::string {
+  // Base class returns empty; UDP override will return the real one.
+  return "";
+}
+
+auto ConnectionToClient::GetClientIPAddress() const -> std::string {
+  // Base implementation returns "N/A"
+  return "N/A";
+}
+
+} // namespace ballistica::scene_v1
+
