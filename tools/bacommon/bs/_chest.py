@@ -5,7 +5,11 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import assert_never
+from typing import assert_never, Annotated, override
+from dataclasses import dataclass
+
+from efro.dataclassio import ioprepped, IOAttrs
+import bacommon.displayitem as ditm
 
 
 class ClassicChestAppearance(Enum):
@@ -24,7 +28,7 @@ class ClassicChestAppearance(Enum):
     def pretty_name(self) -> str:
         """Pretty name for the chest in English."""
         # pylint: disable=too-many-return-statements
-        cls = type(self)
+        cls = ClassicChestAppearance
 
         if self is cls.UNKNOWN:
             return 'Unknown Chest'
@@ -44,3 +48,20 @@ class ClassicChestAppearance(Enum):
             return 'L6 Chest'
 
         assert_never(self)
+
+
+@ioprepped
+@dataclass
+class ClassicChestDisplayItem(ditm.Item):
+    """Display a chest."""
+
+    appearance: Annotated[ClassicChestAppearance, IOAttrs('a')]
+
+    @override
+    @classmethod
+    def get_type_id(cls) -> ditm.ItemTypeID:
+        return ditm.ItemTypeID.CHEST
+
+    @override
+    def get_description(self) -> tuple[str, list[tuple[str, str]]]:
+        return self.appearance.pretty_name, []

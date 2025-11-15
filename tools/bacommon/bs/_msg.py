@@ -5,125 +5,16 @@
 from __future__ import annotations
 
 import datetime
-from enum import Enum
 from dataclasses import dataclass, field
 from typing import Annotated, override
 
 from efro.dataclassio import ioprepped, IOAttrs
 from efro.message import Message, Response
 
-from bacommon.bs._displayitem import DisplayItemWrapper
-from bacommon.bs._clienteffect import ClientEffect
-from bacommon.bs._clouddialog import CloudDialogAction, CloudDialogWrapper
+import bacommon.displayitem as ditm
+import bacommon.clouddialog as cdlg
+import bacommon.clienteffect as clfx
 from bacommon.bs._chest import ClassicChestAppearance
-
-
-@ioprepped
-@dataclass
-class ChestActionMessage(Message):
-    """Request action about a chest."""
-
-    class Action(Enum):
-        """Types of actions we can request."""
-
-        # Unlocking (for free or with tokens).
-        UNLOCK = 'u'
-
-        # Watched an ad to reduce wait.
-        AD = 'ad'
-
-    action: Annotated[Action, IOAttrs('a')]
-
-    # Tokens we are paying (only applies to unlock).
-    token_payment: Annotated[int, IOAttrs('t')]
-
-    chest_id: Annotated[str, IOAttrs('i')]
-
-    @override
-    @classmethod
-    def get_response_types(cls) -> list[type[Response] | None]:
-        return [ChestActionResponse]
-
-
-@ioprepped
-@dataclass
-class ChestActionResponse(Response):
-    """Here's the results of that action you asked for, boss."""
-
-    # Tokens that were actually charged.
-    tokens_charged: Annotated[int, IOAttrs('t')] = 0
-
-    # If present, signifies the chest has been opened and we should show
-    # the user this stuff that was in it.
-    contents: Annotated[list[DisplayItemWrapper] | None, IOAttrs('c')] = None
-
-    # If contents are present, which of the chest's prize-sets they
-    # represent.
-    prizeindex: Annotated[int, IOAttrs('i')] = 0
-
-    # Printable error if something goes wrong.
-    error: Annotated[str | None, IOAttrs('e')] = None
-
-    # Printable warning. Shown in orange with an error sound. Does not
-    # mean the action failed; only that there's something to tell the
-    # users such as 'It looks like you are faking ad views; stop it or
-    # you won't have ad options anymore.'
-    warning: Annotated[str | None, IOAttrs('w', store_default=False)] = None
-
-    # Printable success message. Shown in green with a cash-register
-    # sound. Can be used for things like successful wait reductions via
-    # ad views. Used in builds earlier than 22311; can remove once
-    # 22311+ is ubiquitous.
-    success_msg: Annotated[str | None, IOAttrs('s', store_default=False)] = None
-
-    # Effects to show on the client. Replaces warning and success_msg in
-    # build 22311 or newer.
-    effects: Annotated[
-        list[ClientEffect], IOAttrs('fx', store_default=False)
-    ] = field(default_factory=list)
-
-
-@ioprepped
-@dataclass
-class CloudDialogActionMessage(Message):
-    """Do something to a client ui."""
-
-    id: Annotated[str, IOAttrs('i')]
-    action: Annotated[CloudDialogAction, IOAttrs('a')]
-
-    @override
-    @classmethod
-    def get_response_types(cls) -> list[type[Response] | None]:
-        return [CloudDialogActionResponse]
-
-
-@ioprepped
-@dataclass
-class CloudDialogActionResponse(Response):
-    """Did something to that inbox entry, boss."""
-
-    class ErrorType(Enum):
-        """Types of errors that may have occurred."""
-
-        # Probably a future error type we don't recognize.
-        UNKNOWN = 'u'
-
-        # Something went wrong on the server, but specifics are not
-        # relevant.
-        INTERNAL = 'i'
-
-        # The entry expired on the server. In various cases such as 'ok'
-        # buttons this can generally be ignored.
-        EXPIRED = 'e'
-
-    error_type: Annotated[
-        ErrorType | None, IOAttrs('et', enum_fallback=ErrorType.UNKNOWN)
-    ]
-
-    # User facing error message in the case of errors.
-    error_message: Annotated[str | None, IOAttrs('em')]
-
-    effects: Annotated[list[ClientEffect], IOAttrs('fx')]
 
 
 @ioprepped
@@ -183,7 +74,7 @@ class InboxRequestMessage(Message):
 class InboxRequestResponse(Response):
     """Here's that inbox contents you asked for, boss."""
 
-    wrappers: Annotated[list[CloudDialogWrapper], IOAttrs('w')]
+    wrappers: Annotated[list[cdlg.Wrapper], IOAttrs('w')]
 
     # Printable error if something goes wrong.
     error: Annotated[str | None, IOAttrs('e')] = None
@@ -241,7 +132,7 @@ class ChestInfoResponse(Response):
             """A possible set of prizes for this chest."""
 
             weight: Annotated[float, IOAttrs('w')]
-            contents: Annotated[list[DisplayItemWrapper], IOAttrs('c')]
+            contents: Annotated[list[ditm.Wrapper], IOAttrs('c')]
 
         appearance: Annotated[
             ClassicChestAppearance,
@@ -307,7 +198,7 @@ class ScoreSubmitResponse(Response):
     """Did something to that inbox entry, boss."""
 
     # Things we should show on our end.
-    effects: Annotated[list[ClientEffect], IOAttrs('fx')]
+    effects: Annotated[list[clfx.Effect], IOAttrs('fx')]
 
 
 @ioprepped
@@ -330,7 +221,7 @@ class SendInfoResponse(Response):
 
     handled: Annotated[bool, IOAttrs('v')]
     message: Annotated[str | None, IOAttrs('m', store_default=False)] = None
-    effects: Annotated[
-        list[ClientEffect], IOAttrs('e', store_default=False)
-    ] = field(default_factory=list)
+    effects: Annotated[list[clfx.Effect], IOAttrs('e', store_default=False)] = (
+        field(default_factory=list)
+    )
     legacy_code: Annotated[str | None, IOAttrs('l', store_default=False)] = None

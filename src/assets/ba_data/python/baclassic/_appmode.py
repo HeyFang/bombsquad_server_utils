@@ -1,5 +1,6 @@
 # Released under the MIT License. See LICENSE for details.
 #
+# pylint: disable=too-many-lines
 """Contains ClassicAppMode."""
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ from functools import partial
 from typing import TYPE_CHECKING, override
 
 from efro.error import CommunicationError
+import bacommon.clienteffect as clfx
 import bacommon.bs
 from babase import AppMode
 import bauiv1 as bui
@@ -98,10 +100,10 @@ class ClassicAppMode(AppMode):
             self._root_ui_settings_press
         )
         ui.root_ui_calls[ui.RootUIElement.STORE_BUTTON] = (
-            self._root_ui_store_press
+            self._root_ui_store_press_new
         )
         ui.root_ui_calls[ui.RootUIElement.INVENTORY_BUTTON] = (
-            self._root_ui_inventory_press
+            self._root_ui_inventory_press_old
         )
         ui.root_ui_calls[ui.RootUIElement.GET_TOKENS_BUTTON] = (
             self._root_ui_get_tokens_press
@@ -257,21 +259,19 @@ class ClassicAppMode(AppMode):
                 )
 
             assert bui.app.classic is not None
-            effects: list[bacommon.bs.ClientEffect] = [
-                bacommon.bs.ClientEffectTokensAnimation(
+            effects: list[clfx.Effect] = [
+                clfx.TokensAnimation(
                     duration=anim_time,
                     startvalue=self._last_tokens_value,
                     endvalue=self._last_tokens_value + tokens,
                 ),
-                bacommon.bs.ClientEffectDelay(anim_time),
-                bacommon.bs.ClientEffectScreenMessage(
+                clfx.Delay(anim_time),
+                clfx.LegacyScreenMessage(
                     message='You got ${COUNT} tokens!',
                     subs=['${COUNT}', tokens_str],
                     color=(0, 1, 0),
                 ),
-                bacommon.bs.ClientEffectSound(
-                    sound=bacommon.bs.ClientEffectSound.Sound.CASH_REGISTER
-                ),
+                clfx.PlaySound(clfx.Sound.CASH_REGISTER),
             ]
             bui.app.classic.run_bs_client_effects(effects)
 
@@ -750,7 +750,7 @@ class ClassicAppMode(AppMode):
             )
         )
 
-    def _root_ui_store_press(self) -> None:
+    def _root_ui_store_press_old(self) -> None:
         from bauiv1lib.store.browser import StoreBrowserWindow
 
         if not self._ensure_signed_in_v1():
@@ -763,6 +763,24 @@ class ClassicAppMode(AppMode):
                     origin_widget=bui.get_special_widget('store_button')
                 ),
             )
+        )
+
+    def _root_ui_store_press_new(self) -> None:
+        import bacommon.docui.v1 as dui1
+
+        from bauiv1lib.docui import DocUIWindow
+        from bauiv1lib.inventory import InventoryUIController
+
+        # Pop up an auxiliary window wherever we are in the nav stack.
+        bui.app.ui_v1.auxiliary_window_activate(
+            win_type=DocUIWindow,
+            win_create_call=bui.CallStrict(
+                InventoryUIController().create_window,
+                dui1.Request('/'),
+                origin_widget=bui.get_special_widget('store_button'),
+                uiopenstateid='classicstore',
+            ),
+            win_extra_type_id=InventoryUIController.get_window_extra_type_id(),
         )
 
     def _root_ui_tickets_meter_press(self) -> None:
@@ -799,17 +817,35 @@ class ClassicAppMode(AppMode):
             'xp', origin_widget=bui.get_special_widget('level_meter')
         )
 
-    def _root_ui_inventory_press(self) -> None:
-        from bauiv1lib.inventory import InventoryWindow
+    def _root_ui_inventory_press_old(self) -> None:
+        from bauiv1lib.inventory import OldInventoryWindow
 
         if not self._ensure_signed_in_v1():
             return
 
         bui.app.ui_v1.auxiliary_window_activate(
-            win_type=InventoryWindow,
-            win_create_call=lambda: InventoryWindow(
+            win_type=OldInventoryWindow,
+            win_create_call=lambda: OldInventoryWindow(
                 origin_widget=bui.get_special_widget('inventory_button')
             ),
+        )
+
+    def _root_ui_inventory_press_new(self) -> None:
+        import bacommon.docui.v1 as dui1
+
+        from bauiv1lib.docui import DocUIWindow
+        from bauiv1lib.inventory import InventoryUIController
+
+        # Pop up an auxiliary window wherever we are in the nav stack.
+        bui.app.ui_v1.auxiliary_window_activate(
+            win_type=DocUIWindow,
+            win_create_call=bui.CallStrict(
+                InventoryUIController().create_window,
+                dui1.Request('/'),
+                origin_widget=bui.get_special_widget('inventory_button'),
+                uiopenstateid='classicinventory',
+            ),
+            win_extra_type_id=InventoryUIController.get_window_extra_type_id(),
         )
 
     def _ensure_signed_in(self) -> bool:
@@ -850,12 +886,12 @@ class ClassicAppMode(AppMode):
         )
 
     def _root_ui_chest_slot_pressed(self, index: int) -> None:
-        from bauiv1lib.chest import (
-            ChestWindow0,
-            ChestWindow1,
-            ChestWindow2,
-            ChestWindow3,
-        )
+        from bauiv1lib.chest import ChestWindow
+
+        #     ChestWindow1,
+        #     ChestWindow2,
+        #     ChestWindow3,
+        # )
 
         widgetid: Literal[
             'chest_0_button',
@@ -866,16 +902,20 @@ class ClassicAppMode(AppMode):
         winclass: type[ChestWindow]
         if index == 0:
             widgetid = 'chest_0_button'
-            winclass = ChestWindow0
+            winclass = ChestWindow
+            extratypeid = '0'
         elif index == 1:
             widgetid = 'chest_1_button'
-            winclass = ChestWindow1
+            winclass = ChestWindow
+            extratypeid = '1'
         elif index == 2:
             widgetid = 'chest_2_button'
-            winclass = ChestWindow2
+            winclass = ChestWindow
+            extratypeid = '2'
         elif index == 3:
             widgetid = 'chest_3_button'
-            winclass = ChestWindow3
+            winclass = ChestWindow
+            extratypeid = '3'
         else:
             raise RuntimeError(f'Invalid index {index}')
 
@@ -886,6 +926,7 @@ class ClassicAppMode(AppMode):
                     index=index,
                     origin_widget=bui.get_special_widget(widgetid),
                 ),
+                win_extra_type_id=extratypeid,
             )
         )
 
@@ -956,7 +997,7 @@ class ClassicAppMode(AppMode):
                 bui.WeakCallStrict(self._main_win_template_press),
             ),
             bui.DevConsoleButtonDef(
-                'CloudUI Test', bui.WeakCallStrict(self._cloud_ui_test_press)
+                'DocUI Test', bui.WeakCallStrict(self._doc_ui_test_press)
             ),
         ]
 
@@ -970,12 +1011,12 @@ class ClassicAppMode(AppMode):
 
         show_template_main_window()
 
-    def _cloud_ui_test_press(self) -> None:
-        from bauiv1lib.cloudui import show_cloud_ui_window
+    def _doc_ui_test_press(self) -> None:
+        from bauiv1lib.docuitest import show_test_doc_ui_window
 
         # Unintuitively, swish sounds come from buttons, not windows.
         # And dev-console buttons don't make sounds. So we need to
         # explicitly do so here.
         bui.getsound('swish').play()
 
-        show_cloud_ui_window()
+        show_test_doc_ui_window()

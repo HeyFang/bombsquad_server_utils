@@ -351,7 +351,6 @@ SCRIPT_TARGETS_PY_PUBLIC = \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/appinvite.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/characterpicker.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/chest.py \
-  $(BUILD_DIR)/ba_data/python/bauiv1lib/cloudui.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/colorpicker.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/config.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/confirm.py \
@@ -364,6 +363,14 @@ SCRIPT_TARGETS_PY_PUBLIC = \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/coop/tournamentbutton.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/credits.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/discord.py \
+  $(BUILD_DIR)/ba_data/python/bauiv1lib/docui/__init__.py \
+  $(BUILD_DIR)/ba_data/python/bauiv1lib/docui/_controller.py \
+  $(BUILD_DIR)/ba_data/python/bauiv1lib/docui/_window.py \
+  $(BUILD_DIR)/ba_data/python/bauiv1lib/docui/v1prep/__init__.py \
+  $(BUILD_DIR)/ba_data/python/bauiv1lib/docui/v1prep/_calls.py \
+  $(BUILD_DIR)/ba_data/python/bauiv1lib/docui/v1prep/_calls2.py \
+  $(BUILD_DIR)/ba_data/python/bauiv1lib/docui/v1prep/_types.py \
+  $(BUILD_DIR)/ba_data/python/bauiv1lib/docuitest.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/fileselector.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/gather/__init__.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/gather/_gather.py \
@@ -437,6 +444,7 @@ SCRIPT_TARGETS_PY_PUBLIC = \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/store/__init__.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/store/browser.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/store/item.py \
+  $(BUILD_DIR)/ba_data/python/bauiv1lib/store/newstore.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/tabs.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/teamnamescolors.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/template.py \
@@ -494,15 +502,17 @@ SCRIPT_TARGETS_PY_PUBLIC_TOOLS = \
   $(BUILD_DIR)/ba_data/python/bacommon/bs/_account.py \
   $(BUILD_DIR)/ba_data/python/bacommon/bs/_bs.py \
   $(BUILD_DIR)/ba_data/python/bacommon/bs/_chest.py \
-  $(BUILD_DIR)/ba_data/python/bacommon/bs/_clienteffect.py \
-  $(BUILD_DIR)/ba_data/python/bacommon/bs/_clouddialog.py \
-  $(BUILD_DIR)/ba_data/python/bacommon/bs/_displayitem.py \
   $(BUILD_DIR)/ba_data/python/bacommon/bs/_msg.py \
   $(BUILD_DIR)/ba_data/python/bacommon/build.py \
+  $(BUILD_DIR)/ba_data/python/bacommon/clienteffect.py \
   $(BUILD_DIR)/ba_data/python/bacommon/cloud.py \
-  $(BUILD_DIR)/ba_data/python/bacommon/cloudui/__init__.py \
-  $(BUILD_DIR)/ba_data/python/bacommon/cloudui/_cloudui.py \
-  $(BUILD_DIR)/ba_data/python/bacommon/cloudui/v1.py \
+  $(BUILD_DIR)/ba_data/python/bacommon/clouddialog/__init__.py \
+  $(BUILD_DIR)/ba_data/python/bacommon/clouddialog/_clouddialog.py \
+  $(BUILD_DIR)/ba_data/python/bacommon/clouddialog/basic.py \
+  $(BUILD_DIR)/ba_data/python/bacommon/displayitem.py \
+  $(BUILD_DIR)/ba_data/python/bacommon/docui/__init__.py \
+  $(BUILD_DIR)/ba_data/python/bacommon/docui/_docui.py \
+  $(BUILD_DIR)/ba_data/python/bacommon/docui/v1.py \
   $(BUILD_DIR)/ba_data/python/bacommon/locale.py \
   $(BUILD_DIR)/ba_data/python/bacommon/loggercontrol.py \
   $(BUILD_DIR)/ba_data/python/bacommon/logging.py \

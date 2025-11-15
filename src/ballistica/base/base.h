@@ -495,6 +495,7 @@ enum class SysTextureID : uint8_t {
   kSpinner10,
   kSpinner11,
   kCircleSoft,
+  kButtonSquareWide,
 };
 
 enum class SysCubeMapTextureID : uint8_t {
@@ -683,6 +684,9 @@ class BaseFeatureSet : public FeatureSetNativeComponent,
   /// their own event loop).
   void RunAppToCompletion() override;
 
+  void HandleInterruptSignal() override;
+  void HandleTerminateSignal() override;
+
   auto CurrentContext() -> const ContextRef& {
     assert(InLogicThread());  // Up to caller to ensure this.
     return *context_ref;
@@ -740,7 +744,8 @@ class BaseFeatureSet : public FeatureSetNativeComponent,
 
   /// High level screen-message call. Can be called from any thread.
   void ScreenMessage(const std::string& s,
-                     const Vector3f& color = {1.0f, 1.0f, 1.0f}) override;
+                     const Vector3f& color = {1.0f, 1.0f, 1.0f},
+                     bool literal = false) override;
 
   /// Has the app bootstrapping phase completed? The bootstrapping phase
   /// involves initial screen/graphics setup. Asset loading is not allowed

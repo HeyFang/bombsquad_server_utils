@@ -6,23 +6,27 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from efro.util import pairs_from_flat
+import bacommon.displayitem as ditm
 import bacommon.bs
 import bauiv1
-
 
 if TYPE_CHECKING:
     pass
 
 
+# FIXME - migrate to use the doc-ui rendering for these instead.
 def show_display_item(
-    itemwrapper: bacommon.bs.DisplayItemWrapper,
+    itemwrapper: ditm.Wrapper,
     parent: bauiv1.Widget,
     pos: tuple[float, float],
     width: float,
+    debug: bool = False,
 ) -> None:
     """Create ui to depict a display-item."""
+    # pylint: disable=too-many-locals
 
-    height = width * 0.666
+    # Let's go with 4:3 aspect ratio.
+    height = width * 0.75
 
     # Silent no-op if our parent ui is dead.
     if not parent:
@@ -33,15 +37,15 @@ def show_display_item(
     text_y_offs = 0.0
     show_text = True
 
-    if isinstance(itemwrapper.item, bacommon.bs.TicketsDisplayItem):
+    if isinstance(itemwrapper.item, ditm.Tickets):
         img = 'tickets'
         img_y_offs = width * 0.11
         text_y_offs = width * -0.15
-    elif isinstance(itemwrapper.item, bacommon.bs.TokensDisplayItem):
+    elif isinstance(itemwrapper.item, ditm.Tokens):
         img = 'coin'
         img_y_offs = width * 0.11
         text_y_offs = width * -0.15
-    elif isinstance(itemwrapper.item, bacommon.bs.ChestDisplayItem):
+    elif isinstance(itemwrapper.item, bacommon.bs.ClassicChestDisplayItem):
         from baclassic._chest import (
             CHEST_APPEARANCE_DISPLAY_INFOS,
             CHEST_APPEARANCE_DISPLAY_INFO_DEFAULT,
@@ -64,8 +68,7 @@ def show_display_item(
             tint2_color=c_info.tint2,
         )
 
-    # Enable this for testing spacing.
-    if bool(False):
+    if debug:
         bauiv1.imagewidget(
             parent=parent,
             position=(

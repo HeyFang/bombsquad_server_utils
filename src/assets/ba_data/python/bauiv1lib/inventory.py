@@ -4,12 +4,33 @@
 
 from __future__ import annotations
 
-from typing import override
+from typing import override, TYPE_CHECKING
 
 import bauiv1 as bui
 
+from bauiv1lib.docui import DocUIController
 
-class InventoryWindow(bui.MainWindow):
+if TYPE_CHECKING:
+    from bacommon.docui import DocUIRequest, DocUIResponse
+
+    from bauiv1lib.docui import DocUILocalAction
+
+
+class InventoryUIController(DocUIController):
+    """DocUI setup for inventory."""
+
+    @override
+    def fulfill_request(self, request: DocUIRequest) -> DocUIResponse:
+        return self.fulfill_request_cloud(request, 'classicstore')
+
+    @override
+    def local_action(self, action: DocUILocalAction) -> None:
+        bui.screenmessage(
+            f'Would do {action.name!r} with args {action.args!r}.'
+        )
+
+
+class OldInventoryWindow(bui.MainWindow):
     """Shows what you got."""
 
     def __init__(
@@ -145,17 +166,14 @@ class InventoryWindow(bui.MainWindow):
     def get_main_window_state(self) -> bui.MainWindowState:
         # Support recreating our window for back/refresh purposes.
         cls = type(self)
-        out = bui.BasicMainWindowState(
+        return bui.BasicMainWindowState(
             create_call=lambda transition, origin_widget: cls(
                 transition=transition, origin_widget=origin_widget
-            )
+            ),
+            # Keeps our icon glowing as long as this is in the back
+            # stack.
+            uiopenstate=self._uiopenstate,
         )
-        # Store a ui-open-state here. This means that as long as this
-        # state exists in the back-state-list we'll know we're under
-        # settings (and can highlight the settings toolbar button and
-        # whatnot).
-        setattr(out, '_uiopenstate', bui.UIOpenState('classicinventory'))
-        return out
 
     @override
     def main_window_should_preserve_selection(self) -> bool:

@@ -692,10 +692,10 @@ auto BaseFeatureSet::InGraphicsContext() const -> bool {
   return app_adapter->InGraphicsContext();
 }
 
-void BaseFeatureSet::ScreenMessage(const std::string& s,
-                                   const Vector3f& color) {
-  logic->event_loop()->PushCall([this, s, color] {
-    graphics->screenmessages->AddScreenMessage(s, color);
+void BaseFeatureSet::ScreenMessage(const std::string& s, const Vector3f& color,
+                                   bool literal) {
+  logic->event_loop()->PushCall([this, s, color, literal] {
+    graphics->screenmessages->AddScreenMessage(s, literal, color);
   });
 }
 
@@ -1041,5 +1041,7 @@ void BaseFeatureSet::SetUIScale(UIScale scale) {
   // Let interested parties know that it has changed.
   graphics->OnUIScaleChange();
 }
+void BaseFeatureSet::HandleInterruptSignal() { logic->HandleInterruptSignal(); }
+void BaseFeatureSet::HandleTerminateSignal() { logic->HandleTerminateSignal(); }
 
 }  // namespace ballistica::base

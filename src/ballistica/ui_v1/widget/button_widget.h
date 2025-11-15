@@ -50,7 +50,19 @@ class ButtonWidget : public Widget {
   void set_flatness(float val) { flatness_ = val; }
 
   auto set_text_flatness(float f) { text_flatness_ = f; }
-  enum class Style : uint8_t { kRegular, kBack, kBackSmall, kTab, kSquare };
+  enum class Style : uint8_t {
+    kRegular,
+    kBack,
+    kBackSmall,
+    kTab,
+    kSquare,
+    kSmall,
+    kMedium,
+    kLarge,
+    kLarger,
+    kSquareWide,
+  };
+  void set_better_bg_fit(bool val) { better_bg_fit_ = val; }
   auto set_style(Style s) { style_ = s; }
   enum class IconType : uint8_t { kNone, kCancel, kStart };
   void SetTextLiteral(bool val);
@@ -106,6 +118,7 @@ class ButtonWidget : public Widget {
   bool mouse_over_{};
   bool repeat_{};
   bool pressed_{};
+  bool better_bg_fit_{};
   millisecs_t last_activate_time_millisecs_{};
   millisecs_t birth_time_millisecs_{};
   millisecs_t transition_delay_{};

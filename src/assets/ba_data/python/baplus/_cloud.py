@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
     from efro.message import Message, Response, BoolResponse
     import bacommon.bs
+    import bacommon.clouddialog as cdlg
 
 
 # TODO: Should make it possible to define a protocol in bacommon.cloud and
@@ -36,6 +37,8 @@ class CloudSubsystem(babase.AppSubsystem):
     """
 
     #: General engine config values provided by the cloud.
+    #:
+    #: :meta private:
     vals: bacommon.cloud.CloudVals
 
     def __init__(self) -> None:
@@ -250,10 +253,8 @@ class CloudSubsystem(babase.AppSubsystem):
     @overload
     def send_message_cb(
         self,
-        msg: bacommon.bs.CloudDialogActionMessage,
-        on_response: Callable[
-            [bacommon.bs.CloudDialogActionResponse | Exception], None
-        ],
+        msg: cdlg.ActionMessage,
+        on_response: Callable[[cdlg.ActionResponse | Exception], None],
     ) -> None: ...
 
     @overload
@@ -268,9 +269,9 @@ class CloudSubsystem(babase.AppSubsystem):
     @overload
     def send_message_cb(
         self,
-        msg: bacommon.bs.ChestActionMessage,
+        msg: bacommon.cloud.ChestActionMessage,
         on_response: Callable[
-            [bacommon.bs.ChestActionResponse | Exception], None
+            [bacommon.cloud.ChestActionResponse | Exception], None
         ],
     ) -> None: ...
 
@@ -342,6 +343,11 @@ class CloudSubsystem(babase.AppSubsystem):
         self, msg: bacommon.bs.LegacyRequest
     ) -> bacommon.bs.LegacyResponse: ...
 
+    @overload
+    def send_message(
+        self, msg: bacommon.cloud.FulfillDocUIRequest
+    ) -> bacommon.cloud.FulfillDocUIResponse: ...
+
     def send_message(self, msg: Message) -> Response | None:
         """Synchronously send a message to the cloud.
 
@@ -385,7 +391,10 @@ class CloudSubsystem(babase.AppSubsystem):
         self,
         updatecall: Callable[[bacommon.bs.ClassicAccountLiveData], None],
     ) -> babase.CloudSubscription:
-        """Subscribe to classic account data."""
+        """Subscribe to classic account data.
+
+        :meta private:
+        """
         raise NotImplementedError(
             'Cloud functionality is not present in this build.'
         )

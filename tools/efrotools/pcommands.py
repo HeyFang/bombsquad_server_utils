@@ -91,7 +91,7 @@ def requirements_upgrade() -> None:
         # to one exact version and thus shouldn't apply to later ones.
         filterlines: list[tuple[str, str]] = [
             # Fails to build on bastaging (submitted fix).
-            ('pyicu==2.15.3', 'pyicu==2.15.2'),
+            ('pyicu==2.16', 'pyicu==2.15.2'),
         ]
         for fsrc, fdst in filterlines:
             if fsrc in reqs_new:
@@ -369,6 +369,35 @@ def pylint_files() -> None:
     filenames = sys.argv[2:]
     efrotools.code.runpylint(pcommand.PROJROOT, filenames)
     print(f'{Clr.GRN}Pylint Passed.{Clr.RST}')
+
+
+def zmypy() -> None:
+    """Run zuban mypy checks on our scripts."""
+    import efrotools.code
+
+    pcommand.disallow_in_batch()
+
+    full = '-full' in sys.argv
+    efrotools.code.zmypy(pcommand.PROJROOT, full)
+
+
+def zmypy_files() -> None:
+    """Run zuban mypy checks on provided filenames."""
+    from efro.terminal import Clr
+    from efro.error import CleanError
+    import efrotools.code
+
+    pcommand.disallow_in_batch()
+
+    if len(sys.argv) < 3:
+        raise CleanError('Expected at least 1 filename arg.')
+
+    filenames = sys.argv[2:]
+    try:
+        efrotools.code.zmypy_files(pcommand.PROJROOT, filenames)
+        print(f'{Clr.GRN}Zmypy Passed.{Clr.RST}')
+    except Exception as exc:
+        raise CleanError('Zmypy Failed.') from exc
 
 
 def mypy() -> None:

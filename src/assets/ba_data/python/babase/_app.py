@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 import time
+import asyncio
 import logging
 from enum import Enum
 from functools import partial
@@ -33,7 +34,6 @@ from babase._logging import lifecyclelog, applog
 from babase._gc import GarbageCollectionSubsystem
 
 if TYPE_CHECKING:
-    import asyncio
     from typing import Any, Callable, Coroutine, Generator, Awaitable
     from concurrent.futures import Future
 
@@ -281,8 +281,9 @@ class App:
     def mode_selector(self, selector: babase.AppModeSelector) -> None:
         self._mode_selector = selector
 
-    def _on_task_done(self, task: asyncio.Task) -> None:
+    def _on_task_done(self, task: Any) -> None:
         # Report any errors that occurred.
+        assert isinstance(task, asyncio.Task)
         try:
             exc = task.exception()
             if exc is not None:
@@ -1028,7 +1029,6 @@ class App:
                 )
 
     async def _shutdown(self) -> None:
-        import asyncio
 
         _babase.lock_all_input()
         try:
@@ -1054,13 +1054,16 @@ class App:
         self, coro: Coroutine[None, None, None]
     ) -> None:
         """Run a shutdown task; report errors and abort if taking too long."""
-        import asyncio
 
         task = asyncio.create_task(coro)
         try:
             await asyncio.wait_for(task, self.SHUTDOWN_TASK_TIMEOUT_SECONDS)
+        except TimeoutError:
+            # Log simple error message if it times out.
+            logging.error('Timed out waiting for shutdown task %s.', coro)
         except Exception:
-            logging.exception('Error in shutdown task (%s).', coro)
+            # Go with full ugly stack trace for anything unexpected.
+            logging.exception('Error in shutdown task %s.', coro)
 
     def _on_suspend(self) -> None:
         """Called when the app goes to a suspended state."""
@@ -1136,7 +1139,6 @@ class App:
                 )
 
     async def _wait_for_shutdown_suppressions(self) -> None:
-        import asyncio
 
         # Spin and wait for anything blocking shutdown to complete.
         starttime = _babase.apptime()
@@ -1153,7 +1155,6 @@ class App:
             )
 
     async def _fade_and_shutdown_graphics(self) -> None:
-        import asyncio
 
         # Kick off a short fade and give it time to complete.
         lifecyclelog.info('fade-and-shutdown-graphics begin')
@@ -1189,7 +1190,6 @@ class App:
         lifecyclelog.info('fade-and-shutdown-graphics end')
 
     async def _fade_and_shutdown_audio(self) -> None:
-        import asyncio
 
         # Tell the audio system to go down and give it a bit of
         # time to do so gracefully.
