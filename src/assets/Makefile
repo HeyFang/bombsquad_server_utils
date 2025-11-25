@@ -3938,6 +3938,7 @@ TEX2D_DDS_TARGETS = \
   $(BUILD_DIR)/ba_data/textures/ouyaOButton.dds \
   $(BUILD_DIR)/ba_data/textures/ouyaUButton.dds \
   $(BUILD_DIR)/ba_data/textures/ouyaYButton.dds \
+  $(BUILD_DIR)/ba_data/textures/pageLeftRight.dds \
   $(BUILD_DIR)/ba_data/textures/penguinColor.dds \
   $(BUILD_DIR)/ba_data/textures/penguinColorMask.dds \
   $(BUILD_DIR)/ba_data/textures/penguinIcon.dds \
@@ -4367,6 +4368,7 @@ TEX2D_PVR_TARGETS = \
   $(BUILD_DIR)/ba_data/textures/ouyaOButton.pvr \
   $(BUILD_DIR)/ba_data/textures/ouyaUButton.pvr \
   $(BUILD_DIR)/ba_data/textures/ouyaYButton.pvr \
+  $(BUILD_DIR)/ba_data/textures/pageLeftRight.pvr \
   $(BUILD_DIR)/ba_data/textures/penguinColor.pvr \
   $(BUILD_DIR)/ba_data/textures/penguinColorMask.pvr \
   $(BUILD_DIR)/ba_data/textures/penguinIcon.pvr \
@@ -4796,6 +4798,7 @@ TEX2D_KTX_TARGETS = \
   $(BUILD_DIR)/ba_data/textures/ouyaOButton.ktx \
   $(BUILD_DIR)/ba_data/textures/ouyaUButton.ktx \
   $(BUILD_DIR)/ba_data/textures/ouyaYButton.ktx \
+  $(BUILD_DIR)/ba_data/textures/pageLeftRight.ktx \
   $(BUILD_DIR)/ba_data/textures/penguinColor.ktx \
   $(BUILD_DIR)/ba_data/textures/penguinColorMask.ktx \
   $(BUILD_DIR)/ba_data/textures/penguinIcon.ktx \
@@ -5225,6 +5228,7 @@ TEX2D_PREVIEW_PNG_TARGETS = \
   $(BUILD_DIR)/ba_data/textures/ouyaOButton_preview.png \
   $(BUILD_DIR)/ba_data/textures/ouyaUButton_preview.png \
   $(BUILD_DIR)/ba_data/textures/ouyaYButton_preview.png \
+  $(BUILD_DIR)/ba_data/textures/pageLeftRight_preview.png \
   $(BUILD_DIR)/ba_data/textures/penguinColorMask_preview.png \
   $(BUILD_DIR)/ba_data/textures/penguinColor_preview.png \
   $(BUILD_DIR)/ba_data/textures/penguinIconColorMask_preview.png \
