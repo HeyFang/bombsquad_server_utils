@@ -335,6 +335,7 @@
  "ba_data/python/bautils/discord/discord_verify_server.py",
  "ba_data/python/bautils/players/__init__.py",
  "ba_data/python/bautils/plugman/__init__.py",
+ "ba_data/python/bautils/plugman/stats_logger.py",
  "ba_data/python/bautils/settings.py",
  "ba_data/python/bautils/tools/__init__.py",
  "ba_data/python/bautils/tools/ctxmanagers.py",

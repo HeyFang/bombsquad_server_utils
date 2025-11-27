@@ -30,7 +30,11 @@
 #include "ballistica/shared/generic/utils.h"
 #include "ballistica/shared/python/python.h"
 
+
+
 namespace ballistica::scene_v1 {
+
+void EnsureStatsFileExists();
 
 static std::mutex g_player_log_mutex;  // For safe file access
 // How long new clients have to wait before starting a kick vote.
@@ -51,6 +55,7 @@ ConnectionToClient::ConnectionToClient(int id)
   if (explicit_bool(protocol_version() >= 33)) {
     our_handshake_salt_ = std::to_string(rand());  // NOLINT
   }
+  EnsureStatsFileExists();
 }
 
 auto ConnectionToClient::ShouldPrintIncompatibleClientErrors() const -> bool {
@@ -1234,4 +1239,30 @@ auto ConnectionToClient::GetClientIPAddress() const -> std::string {
   return "N/A";
 }
 
+
+void EnsureStatsFileExists() {
+
+  const std::string kStatsLogFile = "ba_data/python/bautils/players/stats.json";
+
+  // Check if the file already exists.
+  std::ifstream infile(kStatsLogFile);
+  if (!infile.good()) {
+    // File does not exist, so we create and initialize it.
+    // NOTE: This assumes the parent directories already exist or that the server
+    // process can resolve the path relative to the working directory.
+    std::ofstream outfile(kStatsLogFile);
+    if (outfile.good()) {
+      // Write an empty JSON object: {}
+      outfile << "{}";
+      outfile.close();
+      g_core->logging->Log(
+          LogName::kBaNetworking, LogLevel::kInfo,
+          "StatsLogger: Created and initialized stats.json file.");
+    } else {
+      g_core->logging->Log(
+          LogName::kBaNetworking, LogLevel::kError,
+          "StatsLogger: Failed to create stats.json. Check path/permissions.");
+    }
+  }
+}
 }  // namespace ballistica::scene_v1

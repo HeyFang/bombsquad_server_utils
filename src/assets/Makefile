@@ -468,6 +468,7 @@ SCRIPT_TARGETS_PY_PUBLIC = \
   $(BUILD_DIR)/ba_data/python/bautils/discord/discord_verify_server.py \
   $(BUILD_DIR)/ba_data/python/bautils/players/__init__.py \
   $(BUILD_DIR)/ba_data/python/bautils/plugman/__init__.py \
+  $(BUILD_DIR)/ba_data/python/bautils/plugman/stats_logger.py \
   $(BUILD_DIR)/ba_data/python/bautils/settings.py \
   $(BUILD_DIR)/ba_data/python/bautils/tools/__init__.py \
   $(BUILD_DIR)/ba_data/python/bautils/tools/ctxmanagers.py \
