@@ -3948,6 +3948,7 @@ TEX2D_DDS_TARGETS = \
   $(BUILD_DIR)/ba_data/textures/pixieIcon.dds \
   $(BUILD_DIR)/ba_data/textures/pixieIconColorMask.dds \
   $(BUILD_DIR)/ba_data/textures/playerLineup.dds \
+  $(BUILD_DIR)/ba_data/textures/plusButton.dds \
   $(BUILD_DIR)/ba_data/textures/powerupBomb.dds \
   $(BUILD_DIR)/ba_data/textures/powerupCurse.dds \
   $(BUILD_DIR)/ba_data/textures/powerupHealth.dds \
@@ -4379,6 +4380,7 @@ TEX2D_PVR_TARGETS = \
   $(BUILD_DIR)/ba_data/textures/pixieIcon.pvr \
   $(BUILD_DIR)/ba_data/textures/pixieIconColorMask.pvr \
   $(BUILD_DIR)/ba_data/textures/playerLineup.pvr \
+  $(BUILD_DIR)/ba_data/textures/plusButton.pvr \
   $(BUILD_DIR)/ba_data/textures/powerupBomb.pvr \
   $(BUILD_DIR)/ba_data/textures/powerupCurse.pvr \
   $(BUILD_DIR)/ba_data/textures/powerupHealth.pvr \
@@ -4810,6 +4812,7 @@ TEX2D_KTX_TARGETS = \
   $(BUILD_DIR)/ba_data/textures/pixieIcon.ktx \
   $(BUILD_DIR)/ba_data/textures/pixieIconColorMask.ktx \
   $(BUILD_DIR)/ba_data/textures/playerLineup.ktx \
+  $(BUILD_DIR)/ba_data/textures/plusButton.ktx \
   $(BUILD_DIR)/ba_data/textures/powerupBomb.ktx \
   $(BUILD_DIR)/ba_data/textures/powerupCurse.ktx \
   $(BUILD_DIR)/ba_data/textures/powerupHealth.ktx \
@@ -5241,6 +5244,7 @@ TEX2D_PREVIEW_PNG_TARGETS = \
   $(BUILD_DIR)/ba_data/textures/pixieIconColorMask_preview.png \
   $(BUILD_DIR)/ba_data/textures/pixieIcon_preview.png \
   $(BUILD_DIR)/ba_data/textures/playerLineup_preview.png \
+  $(BUILD_DIR)/ba_data/textures/plusButton_preview.png \
   $(BUILD_DIR)/ba_data/textures/powerupBomb_preview.png \
   $(BUILD_DIR)/ba_data/textures/powerupCurse_preview.png \
   $(BUILD_DIR)/ba_data/textures/powerupHealth_preview.png \
