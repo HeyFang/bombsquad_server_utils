@@ -36,4 +36,3 @@ class RegisterPlugins(bs.Plugin):
         except Exception as e:
             print(f"ERROR in RegisterPlugins: Failed to import module: {e}")
             pass
-

@@ -76,15 +76,29 @@ class Info(ServerCommand):
                 _id = self.filter_client_id(client_id)
                 target = self.get_session_player(_id)
 
+                try:
+                    acc_id = target.get_v1_account_id()
+                    short_name = target.inputdevice.get_v1_account_name(
+                        full=False
+                    )
+                except Exception:
+                    acc_id = "N/A"
+                    short_name = "N/A"
+
                 # Build display message with profiles on that input device.
                 try:
                     profiles = target.inputdevice.get_player_profiles()
+
                 except Exception:
                     profiles = {}  # Initialize as empty dict instead of list
 
+                profile_names = [
+                    p for p in profiles.keys() if p != "__account__"
+                ][:10]
                 header = f"{"Sr.no":<9} |    {"Name":<12}\n" + ("-" * 25) + "\n"
-                lines = [header]
-                for i, profile in enumerate(profiles, start=1):
+                line0 = f"{acc_id} | {short_name}" + "\n"
+                lines = [header, line0]
+                for i, profile in enumerate(profile_names, start=1):
                     try:
                         lines.append(f"{i:<9} {profile:<12}\n")
                     except Exception:

@@ -74,10 +74,14 @@ class StatsLoggerPlugin(ba.Plugin):
         try:
             original = bs.GameActivity.end
         except Exception:
-            print("[StatsLogger] bs.Activity.end not found; skipping this patch.")
+            print(
+                "[StatsLogger] bs.Activity.end not found; skipping this patch."
+            )
             return
 
-        def wrapped_activity_end(activity: bs.GameActivity, *args, **kwargs) -> Any:
+        def wrapped_activity_end(
+            activity: bs.GameActivity, *args, **kwargs
+        ) -> Any:
             # print("[StatsLogger] wrapped Activity.end called; activity:", type(activity).__name__)
             LOGGED_FLAG = "stats_logged"
 
@@ -88,23 +92,23 @@ class StatsLoggerPlugin(ba.Plugin):
                 except Exception:
                     print("[StatsLogger] original Activity.end raised:")
                     return None
-                    
+
             setattr(activity, LOGGED_FLAG, True)
 
             try:
-                # We log here because the stats objects are still guaranteed to be valid 
+                # We log here because the stats objects are still guaranteed to be valid
                 # and tied to the game's final state.
                 self._attempt_log(activity, reason="GameActivity.end")
             except Exception:
-                print("[StatsLogger] Error in stats logger after GameActivity.end:")
-            
+                print(
+                    "[StatsLogger] Error in stats logger after GameActivity.end:"
+                )
 
             try:
                 result = original(activity, *args, **kwargs)
             except Exception:
                 print("[StatsLogger] original Activity.end raised:")
                 return None
-
 
         bs.GameActivity.end = wrapped_activity_end
         # print("[StatsLogger] Patched bs.Activity.end")
@@ -140,7 +144,6 @@ class StatsLoggerPlugin(ba.Plugin):
             kills = 0
             deaths = 0
 
-        
             try:
                 stats_obj = session.stats
                 records = stats_obj.get_records()
@@ -156,7 +159,7 @@ class StatsLoggerPlugin(ba.Plugin):
 
                 # print("SessionPlayer:", sp)
                 # print("All records keys:", list(records.keys()))
-            
+
                 if record:
                     # print("PlayerRecord:", record.__dict__)
                     score = record.accumscore
@@ -174,7 +177,7 @@ class StatsLoggerPlugin(ba.Plugin):
                 print("[StatsLogger] ERROR reading Stats:", e)
 
             try:
-                acc_id = sp.get_v1_account_id()    # REAL ACCOUNT ID
+                acc_id = sp.get_v1_account_id()  # REAL ACCOUNT ID
                 dev = sp.inputdevice
                 short_name = dev.get_v1_account_name(full=False)
             except Exception:
@@ -222,7 +225,9 @@ class StatsLoggerPlugin(ba.Plugin):
                         f"Score+{score}, Kills+{kills}, Deaths+{deaths}"
                     )
                 else:
-                    print(f"[StatsLogger] No stat changes for: {short_name} ({acc_id})")
+                    print(
+                        f"[StatsLogger] No stat changes for: {short_name} ({acc_id})"
+                    )
 
         if changed:
             _save_json(self.stats_path, stats)

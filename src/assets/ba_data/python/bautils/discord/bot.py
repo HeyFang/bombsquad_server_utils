@@ -10,7 +10,9 @@ import json  # To format data for sending
 
 # --- Configuration ---
 BOT_TOKEN = 'YOUR_DISCORD_BOT_TOKEN_HERE'  # Replace with your actual bot token
-GUILD_ID = 'YOUR_GUILD_ID_HERE'  # Replace with your actual Server ID (as an integer)
+GUILD_ID = (
+    'YOUR_GUILD_ID_HERE'  # Replace with your actual Server ID (as an integer)
+)
 STAFF_ROLE_ID = 'YOUR_STAFF_ROLE_ID_HERE'  # Replace with your actual Staff Role ID (as an integer)
 # This *must* match the path the BombSquad server will listen on
 SOCKET_PATH = '/tmp/bombsquad_verify.sock'  # Example path in /tmp
@@ -60,7 +62,6 @@ async def on_ready():
     client_id='Your current client ID shown in the verification message',
 )
 @app_commands.checks.has_role(STAFF_ROLE_ID)
-
 async def verify(
     interaction: discord.Interaction, shortname: str, client_id: int
 ):
@@ -132,16 +133,16 @@ async def verify(
             client_sock.close()
             print("Socket connection closed.")
 
+
 @bot.tree.error
 async def on_app_command_error(
-    interaction: discord.Interaction,
-    error: app_commands.AppCommandError
+    interaction: discord.Interaction, error: app_commands.AppCommandError
 ):
     """Handles errors from slash commands."""
     if isinstance(error, app_commands.MissingRole):
         await interaction.response.send_message(
             "❌ You do not have the required 'Staff' role to use this command.",
-            ephemeral=True  # Send the message privately
+            ephemeral=True,  # Send the message privately
         )
     else:
         # Fallback for other potential errors
@@ -154,6 +155,7 @@ async def on_app_command_error(
             await interaction.followup.send(
                 "❌ An unexpected error occurred.", ephemeral=True
             )
+
 
 # --- Run the Bot ---
 if __name__ == "__main__":
