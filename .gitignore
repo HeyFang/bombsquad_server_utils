@@ -133,4 +133,3 @@ BallisticaKit.ico
 /ballisticakit-xcode/BallisticaKit Shared/Assets.xcassets/tvOS App Icon & Top Shelf Image.brandassets/Top Shelf Image Wide.imageset/*.png
 /ballisticakit-xcode/BallisticaKit Shared/Assets.xcassets/tvOS App Icon & Top Shelf Image.brandassets/Top Shelf Image.imageset/*.png
 /ballisticakit-xcode/BallisticaKit Shared/Assets.xcassets/Cursor macOS.imageset/cursor_*.png
-src/ballistica/scene_v1/connection/connection_to_client_udp.cc
