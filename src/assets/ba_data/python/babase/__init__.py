@@ -7,6 +7,7 @@ directly. Instead one should use purpose-built packages such as
 :mod:`bascenev1` or :mod:`bauiv1` which themselves import various
 functionality from here and reexpose it in a more focused way.
 """
+
 # pylint: disable=redefined-builtin
 
 # ba_meta require api 9
@@ -126,6 +127,7 @@ from _babase import (
 )
 
 from babase._accountv2 import AccountV2Handle, AccountV2Subsystem
+from babase._analytics import AnalyticsSubsystem
 from babase._app import App, AppState
 from babase._appcomponent import AppComponentSubsystem
 from babase._appconfig import commit_app_config
@@ -220,6 +222,7 @@ __all__ = [
     'ActorNotFoundError',
     'allows_ticket_sales',
     'add_clean_frame_callback',
+    'AnalyticsSubsystem',
     'android_get_external_files_dir',
     'app',
     'App',

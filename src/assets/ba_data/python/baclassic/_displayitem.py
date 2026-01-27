@@ -1,13 +1,14 @@
 # Released under the MIT License. See LICENSE for details.
 #
 """Display-item related functionality."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, assert_never
 
 from efro.util import pairs_from_flat
 import bacommon.displayitem as ditm
-import bacommon.bs
+import bacommon.classic
 import bauiv1
 
 if TYPE_CHECKING:
@@ -52,7 +53,9 @@ def show_display_item(
         img_y_offs = width * 0.11
         text_y_offs = width * -0.15
     elif itemtype is ditm.ItemTypeID.CHEST:
-        assert isinstance(itemwrapper.item, bacommon.bs.ClassicChestDisplayItem)
+        assert isinstance(
+            itemwrapper.item, bacommon.classic.ClassicChestDisplayItem
+        )
         from baclassic._chest import (
             CHEST_APPEARANCE_DISPLAY_INFOS,
             CHEST_APPEARANCE_DISPLAY_INFO_DEFAULT,

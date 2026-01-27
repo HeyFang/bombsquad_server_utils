@@ -10,9 +10,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, assert_never, override
 
 import bacommon.cloud
-import bacommon.bs
+import bacommon.classic
 import bauiv1 as bui
-
 
 if TYPE_CHECKING:
     from typing import Any, Callable
@@ -109,7 +108,12 @@ class GetTokensWindow(bui.MainWindow):
                     _TxtDef(
                         bui.Lstr(
                             resource='tokens.numTokensText',
-                            subs=[('${COUNT}', str(bacommon.bs.TOKENS1_COUNT))],
+                            subs=[
+                                (
+                                    '${COUNT}',
+                                    str(bacommon.classic.TOKENS1_COUNT),
+                                )
+                            ],
                         ),
                         pos=(bwidthstd * 0.5, pos1),
                         color=(1.1, 1.05, 1.0),
@@ -149,7 +153,12 @@ class GetTokensWindow(bui.MainWindow):
                     _TxtDef(
                         bui.Lstr(
                             resource='tokens.numTokensText',
-                            subs=[('${COUNT}', str(bacommon.bs.TOKENS2_COUNT))],
+                            subs=[
+                                (
+                                    '${COUNT}',
+                                    str(bacommon.classic.TOKENS2_COUNT),
+                                )
+                            ],
                         ),
                         pos=(bwidthstd * 0.5, pos1),
                         color=(1.1, 1.05, 1.0),
@@ -189,7 +198,12 @@ class GetTokensWindow(bui.MainWindow):
                     _TxtDef(
                         bui.Lstr(
                             resource='tokens.numTokensText',
-                            subs=[('${COUNT}', str(bacommon.bs.TOKENS3_COUNT))],
+                            subs=[
+                                (
+                                    '${COUNT}',
+                                    str(bacommon.classic.TOKENS3_COUNT),
+                                )
+                            ],
                         ),
                         pos=(bwidthstd * 0.5, pos1),
                         color=(1.1, 1.05, 1.0),
@@ -229,7 +243,12 @@ class GetTokensWindow(bui.MainWindow):
                     _TxtDef(
                         bui.Lstr(
                             resource='tokens.numTokensText',
-                            subs=[('${COUNT}', str(bacommon.bs.TOKENS4_COUNT))],
+                            subs=[
+                                (
+                                    '${COUNT}',
+                                    str(bacommon.classic.TOKENS4_COUNT),
+                                )
+                            ],
                         ),
                         pos=(bwidthstd * 0.5, pos1),
                         color=(1.1, 1.05, 1.0),

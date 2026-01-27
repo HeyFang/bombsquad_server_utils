@@ -161,6 +161,7 @@ ASSET_TARGETS_WIN_X64 += $(PROJ_DIR)/.cache/assetmanifests/gui_desktop_v2dev1
 SCRIPT_TARGETS_PY_PUBLIC = \
   $(BUILD_DIR)/ba_data/python/babase/__init__.py \
   $(BUILD_DIR)/ba_data/python/babase/_accountv2.py \
+  $(BUILD_DIR)/ba_data/python/babase/_analytics.py \
   $(BUILD_DIR)/ba_data/python/babase/_app.py \
   $(BUILD_DIR)/ba_data/python/babase/_appcomponent.py \
   $(BUILD_DIR)/ba_data/python/babase/_appconfig.py \
@@ -410,7 +411,6 @@ SCRIPT_TARGETS_PY_PUBLIC = \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/profile/__init__.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/profile/edit.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/profile/upgrade.py \
-  $(BUILD_DIR)/ba_data/python/bauiv1lib/purchase.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/qrcode.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/radiogroup.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/report.py \
@@ -441,10 +441,7 @@ SCRIPT_TARGETS_PY_PUBLIC = \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/soundtrack/edit.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/soundtrack/entrytypeselect.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/soundtrack/macmusicapp.py \
-  $(BUILD_DIR)/ba_data/python/bauiv1lib/store/__init__.py \
-  $(BUILD_DIR)/ba_data/python/bauiv1lib/store/browser.py \
-  $(BUILD_DIR)/ba_data/python/bauiv1lib/store/item.py \
-  $(BUILD_DIR)/ba_data/python/bauiv1lib/store/newstore.py \
+  $(BUILD_DIR)/ba_data/python/bauiv1lib/store.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/tabs.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/teamnamescolors.py \
   $(BUILD_DIR)/ba_data/python/bauiv1lib/template.py \
@@ -490,16 +487,17 @@ $(SCRIPT_TARGETS_PY_PUBLIC) : $(BUILD_DIR)/%.py : %.py
 
 SCRIPT_TARGETS_PY_PUBLIC_TOOLS = \
   $(BUILD_DIR)/ba_data/python/bacommon/__init__.py \
+  $(BUILD_DIR)/ba_data/python/bacommon/analytics.py \
   $(BUILD_DIR)/ba_data/python/bacommon/app.py \
   $(BUILD_DIR)/ba_data/python/bacommon/assets.py \
   $(BUILD_DIR)/ba_data/python/bacommon/bacloud.py \
-  $(BUILD_DIR)/ba_data/python/bacommon/bs/__init__.py \
-  $(BUILD_DIR)/ba_data/python/bacommon/bs/_account.py \
-  $(BUILD_DIR)/ba_data/python/bacommon/bs/_bs.py \
-  $(BUILD_DIR)/ba_data/python/bacommon/bs/_chest.py \
-  $(BUILD_DIR)/ba_data/python/bacommon/bs/_displayitem.py \
-  $(BUILD_DIR)/ba_data/python/bacommon/bs/_msg.py \
   $(BUILD_DIR)/ba_data/python/bacommon/build.py \
+  $(BUILD_DIR)/ba_data/python/bacommon/classic/__init__.py \
+  $(BUILD_DIR)/ba_data/python/bacommon/classic/_account.py \
+  $(BUILD_DIR)/ba_data/python/bacommon/classic/_chest.py \
+  $(BUILD_DIR)/ba_data/python/bacommon/classic/_classic.py \
+  $(BUILD_DIR)/ba_data/python/bacommon/classic/_displayitem.py \
+  $(BUILD_DIR)/ba_data/python/bacommon/classic/_msg.py \
   $(BUILD_DIR)/ba_data/python/bacommon/clienteffect.py \
   $(BUILD_DIR)/ba_data/python/bacommon/cloud.py \
   $(BUILD_DIR)/ba_data/python/bacommon/clouddialog/__init__.py \
@@ -3208,6 +3206,7 @@ DATA_TARGETS = \
   $(BUILD_DIR)/ba_data/data/languages/hungarian.json \
   $(BUILD_DIR)/ba_data/data/languages/indonesian.json \
   $(BUILD_DIR)/ba_data/data/languages/italian.json \
+  $(BUILD_DIR)/ba_data/data/languages/japanese.json \
   $(BUILD_DIR)/ba_data/data/languages/kazakh.json \
   $(BUILD_DIR)/ba_data/data/languages/korean.json \
   $(BUILD_DIR)/ba_data/data/languages/malay.json \

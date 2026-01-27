@@ -1,6 +1,25 @@
-### 1.7.60 (build 22680, api 9, 2025-12-12)
+### 1.7.60 (build 22701, api 9, 2026-01-26)
 - Fun easter-egg when clicking characters in inventory window (Thanks
   EraOSBeta!)
+- It is no longer possible to capture the hill from below the platform in happy
+  thoughts king of the hill (Thanks ZackerDC!)
+- Added Japanese translation (Thanks internet stranger!!)
+- Removed final remnants of the old store UI.
+- Tweaked flag positions on Roundabout to reduce tossing-the-flag-across cheese
+  (Thanks SoK!).
+- Fixed an error that could occur when leaving solo mode elimination (Thanks
+  FluffyPal0!).
+- Asset-package versions now use a date-based version format instead of a
+  numeric one. So instead of `a-0.bastdassets.5`, built-in assets will now come
+  from something like `a-0.bastdassets.260116` (YYMMDD).
+- Flatpak package name is now `net.froemling.bombsquad` instead of
+  `net.froemling.BombSquad` along with improved package metadata.
+  Installing new flatpak builds alongside old flatpak builds will create 2 
+  seperate installs.
+- Added `flatpak-generate-flathub-manifest` make target that will generate 
+  manifest for flathub in `build/flathub`
+- Updated Android audio stack to OpenALSoft 1.25.1 and oboe 1.10.0.
+- Updated Mac and Window audio stack to OpenALSoft 1.25.1.
   
 ### 1.7.59 (build 22677, api 9, 2025-12-12)
 - Added a 'League President' button in the league-rank window. The back-end is
@@ -870,7 +889,8 @@
   two forms. Now it is possible to provide both.
 - Spaz classes now have a `default_hitpoints` which makes customizing that
   easier (Thanks rabbitboom!)
-- Added `docker-gui-release`, `docker-gui-debug`, `docker-server-release`, `docker-server-debug`, `docker-clean` and `docker-save` targets
+- Added `docker-gui-release`, `docker-gui-debug`, `docker-server-release`, 
+  `docker-server-debug`, `docker-clean` and `docker-save` targets
   to Makefile.
 - Fixed an issue in Assault where being teleported back to base with a sticky
   bomb stuck to you would do some crazy rubber-band-launching thing (Thanks

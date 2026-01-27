@@ -108,7 +108,13 @@ class IOMultiType[EnumT: Enum]:
 
     @classmethod
     def get_type(cls, type_id: EnumT) -> type[Self]:
-        """Return a specific subclass given a type-id."""
+        """Return a specific subclass given a type-id.
+
+        Should be overridden by child classes. Generally, users of the
+        class should call
+        :meth:`~efro.dataclassio.IOMultiType.get_type_cached()` instead
+        of this, as it is more efficient.
+        """
         raise NotImplementedError()
 
     @final
@@ -221,6 +227,10 @@ class IOAttrs:
     #: minute boundaries (see :meth:`efro.util.utc_this_minute()`).
     whole_minutes: bool = False
 
+    #: If ``True``, requires ``datetime.datetime`` values to lie exactly on
+    #: second boundaries (see :meth:`efro.util.utc_this_second()`).
+    whole_seconds: bool = False
+
     #: If ``True``, values of type ``datetime.datetime`` (in json codec)
     #: and ``datetime.timedelta`` (in all codecs) will be stored as single
     #: float timestamp/seconds values instead of the default list of
@@ -257,6 +267,12 @@ class IOAttrs:
     #: editing the value. Does not actually affect value input/output.
     multiline: bool | None = None
 
+    #: If provided for a string, hints whether the value should be
+    #: edited as distinct options in something like a popup menu instead
+    #: of as a text field. Can be referenced when creating UI for
+    #: editing the value. Does not actually affect value input/output.
+    edit_as_options: bool | None = None
+
     def __init__(
         self,
         storagename: str | None = storagename,
@@ -265,12 +281,16 @@ class IOAttrs:
         whole_days: bool = whole_days,
         whole_hours: bool = whole_hours,
         whole_minutes: bool = whole_minutes,
+        whole_seconds: bool = whole_seconds,
         float_times: bool = float_times,
         soft_default: Any = MISSING,
         soft_default_factory: Callable[[], Any] | _MissingType = MISSING,
         enum_fallback: Enum | None = None,
         multiline: bool | None = None,
+        edit_as_options: bool | None = None,
     ):
+        # pylint: disable=too-many-branches
+
         # Only store values that differ from class defaults to keep
         # our instances nice and lean.
         cls = type(self)
@@ -284,6 +304,8 @@ class IOAttrs:
             self.whole_hours = whole_hours
         if whole_minutes != cls.whole_minutes:
             self.whole_minutes = whole_minutes
+        if whole_seconds != cls.whole_seconds:
+            self.whole_seconds = whole_seconds
         if float_times != cls.float_times:
             self.float_times = float_times
         if soft_default is not cls.soft_default:
@@ -305,6 +327,8 @@ class IOAttrs:
             self.enum_fallback = enum_fallback
         if multiline is not cls.multiline:
             self.multiline = multiline
+        if edit_as_options is not cls.multiline:
+            self.edit_as_options = edit_as_options
 
     def validate_for_field(self, cls: type, field: dataclasses.Field) -> None:
         """Ensure the IOAttrs is ok to use with provided field."""
@@ -357,6 +381,11 @@ class IOAttrs:
             if any(x != 0 for x in (value.second, value.microsecond)):
                 raise ValueError(
                     f'Value {value} at {fieldpath}' f' is not a whole minute.'
+                )
+        elif self.whole_seconds:
+            if any(x != 0 for x in (value.microsecond,)):
+                raise ValueError(
+                    f'Value {value} at {fieldpath}' f' is not a whole second.'
                 )
 
 

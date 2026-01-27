@@ -1,6 +1,7 @@
 # Released under the MIT License. See LICENSE for details.
 #
 """UI related to league rank."""
+
 # pylint: disable=too-many-lines
 
 from __future__ import annotations
@@ -9,7 +10,7 @@ import copy
 import logging
 from typing import TYPE_CHECKING, override
 
-import bacommon.bs
+import bacommon.classic
 import bauiv1 as bui
 from bauiv1lib.utils import scroll_fade_bottom, scroll_fade_top
 from bauiv1lib.popup import PopupMenu
@@ -226,7 +227,8 @@ class LeagueRankWindow(bui.MainWindow):
     def _on_p_button_info_response(
         self,
         response: (
-            bacommon.bs.GetClassicLeaguePresidentButtonInfoResponse | Exception
+            bacommon.classic.GetClassicLeaguePresidentButtonInfoResponse
+            | Exception
         ),
     ) -> None:
 
@@ -416,7 +418,9 @@ class LeagueRankWindow(bui.MainWindow):
             if plus.accounts.primary is not None:
                 with plus.accounts.primary:
                     plus.cloud.send_message_cb(
-                        bacommon.bs.GetClassicLeaguePresidentButtonInfoMessage(
+                        (
+                            bacommon.classic
+                        ).GetClassicLeaguePresidentButtonInfoMessage(
                             season=self._requested_season
                         ),
                         on_response=bui.WeakCallPartial(

@@ -511,22 +511,6 @@ build/prefab/full/linux_%_server/release/dist/ballisticakit_headless: .efrocache
 build/prefab/lib/linux_%_server/release/libballisticaplus.a: .efrocachemap
 	@$(PCOMMANDBATCH) efrocache_get $@
 
-# Linux flatpak debug:
-
-flatpak-linux: env
-	mkdir build/flatpak -p
-	flatpak-builder --repo=./.cache/flatpak/repo \
-	--force-clean --keep-build-dirs \
-	--state-dir=./.cache/flatpak/flatpak-builder \
-	./.cache/flatpak/build_dir \
-	config/flatpak/net.froemling.BombSquad.yml
-	flatpak build-bundle ./.cache/flatpak/repo \
-	build/flatpak/bombsquad.flatpak net.froemling.BombSquad
-
-flatpak-clean:
-	rm build/flatpak -rf
-	rm .cache/flatpak -rf
-
 # Windows gui debug:
 
 RUN_PREFAB_WINDOWS_X86_64_GUI_DEBUG = cd \
@@ -1150,7 +1134,7 @@ cmake-server-build: assets-server meta cmake-server-binary
 cmake-server-binary: meta
 	@$(PCOMMAND) cmake_prep_dir build/cmake/server-$(CM_BT_LC)
 	@cd build/cmake/server-$(CM_BT_LC) && test -f Makefile \
-      || cmake -DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE) -DHEADLESS=true \
+      || cmake -DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE) $(CMAKE_EXTRA_ARGS) -DHEADLESS=true \
       $(shell pwd)/ballisticakit-cmake
 	@tools/pcommand update_cmake_prefab_lib server $(CM_BT_LC) \
       build/cmake/server-$(CM_BT_LC)
@@ -1172,7 +1156,7 @@ cmake-modular: cmake-modular-build
 cmake-modular-binary: meta
 	@$(PCOMMAND) cmake_prep_dir build/cmake/modular-$(CM_BT_LC)
 	@cd build/cmake/modular-$(CM_BT_LC) && test -f Makefile \
-      || cmake -DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE) \
+      || cmake -DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE) $(CMAKE_EXTRA_ARGS) \
       $(shell pwd)/ballisticakit-cmake
 	@tools/pcommand update_cmake_prefab_lib standard $(CM_BT_LC) \
       build/cmake/modular-$(CM_BT_LC)
@@ -1194,7 +1178,7 @@ cmake-modular-server-build: assets-server meta cmake-modular-server-binary
 cmake-modular-server-binary: meta
 	@$(PCOMMAND) cmake_prep_dir build/cmake/modular-server-$(CM_BT_LC)
 	@cd build/cmake/modular-server-$(CM_BT_LC) && test -f Makefile \
-      || cmake -DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE) -DHEADLESS=true \
+      || cmake -DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE) $(CMAKE_EXTRA_ARGS) -DHEADLESS=true \
       $(shell pwd)/ballisticakit-cmake
 	@tools/pcommand update_cmake_prefab_lib server $(CM_BT_LC) \
       build/cmake/modular-server-$(CM_BT_LC)
@@ -1265,6 +1249,31 @@ docker-clean:
 	rm -rf build/docker/
 	$(PCOMMAND) remove_docker_images
 	docker system prune
+
+
+################################################################################
+#                                                                              #
+#                                   Flatpak                                    #
+#                                                                              #
+################################################################################
+
+flatpak-linux: env
+	mkdir build/flatpak -p
+	flatpak-builder --repo=./.cache/flatpak/repo \
+	--force-clean --keep-build-dirs \
+	--state-dir=./.cache/flatpak/flatpak-builder \
+	./.cache/flatpak/build_dir \
+	config/flatpak/net.froemling.bombsquad.yml
+	flatpak build-bundle ./.cache/flatpak/repo \
+	build/flatpak/bombsquad.flatpak net.froemling.bombsquad
+
+flatpak-generate-flathub-manifest:
+	$(PCOMMAND) generate_flathub_manifest
+
+flatpak-clean:
+	rm build/flatpak -rf
+	rm build/flathub -rf
+	rm .cache/flatpak -rf
 
 
 ################################################################################

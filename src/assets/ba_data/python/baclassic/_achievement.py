@@ -1,12 +1,13 @@
 # Released under the MIT License. See LICENSE for details.
 #
 """Various functionality related to achievements."""
+
 from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING
 
-from bacommon.bs import ClassicChestAppearance
+from bacommon.classic import ClassicChestAppearance
 from baclassic._chest import (
     CHEST_APPEARANCE_DISPLAY_INFOS,
     CHEST_APPEARANCE_DISPLAY_INFO_DEFAULT,

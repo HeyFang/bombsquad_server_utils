@@ -253,6 +253,9 @@ enum class SpecialChar : uint8_t {
   kV2Logo,
   kClose,
   kSantaHat,
+  kPotato,
+  kPalmTree,
+  kBoxingGlove,
   kLast  // Sentinel
 };
 

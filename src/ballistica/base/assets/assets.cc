@@ -1374,6 +1374,9 @@ void Assets::InitSpecialChars() {
   special_char_strings_[SpecialChar::kMikirog] = "\xee\x81\xA2";
   special_char_strings_[SpecialChar::kV2Logo] = "\xee\x81\xA3";
   special_char_strings_[SpecialChar::kSantaHat] = "\xee\x81\xA4";
+  special_char_strings_[SpecialChar::kPotato] = "\xee\x81\xA5";
+  special_char_strings_[SpecialChar::kPalmTree] = "\xee\x81\xA6";
+  special_char_strings_[SpecialChar::kBoxingGlove] = "\xee\x81\xA7";
 }
 
 void Assets::SetLanguageKeys(

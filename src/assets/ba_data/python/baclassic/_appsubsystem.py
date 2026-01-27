@@ -3,6 +3,7 @@
 # pylint: disable=too-many-lines
 
 """Provides classic app subsystem."""
+
 from __future__ import annotations
 
 import random
@@ -27,7 +28,7 @@ from baclassic import _input
 if TYPE_CHECKING:
     from typing import Callable, Any, Sequence
 
-    import bacommon.bs
+    import bacommon.classic
     import bacommon.clienteffect as clfx
     import bacommon.clouddialog.basic as bcdlg
     from bascenev1lib.actor import spazappearance
