@@ -13,6 +13,10 @@ enableDiscordAdminAuth: bool = False
 # ---- BS SERVER SETTINGS ----
 enableStatsLog: bool = True
 
+# ---- PASSWORD AUTH SETTINGS ----
+enablePasswordAuth: bool = True
+adminPassword = 'dumbledore'
+
 # ---- IP AUTH SETTINGS ----
 enableIpAuth: bool = False
 # ips are stored in hash form for privacy :>

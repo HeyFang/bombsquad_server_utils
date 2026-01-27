@@ -18,7 +18,10 @@ except ImportError:
 
     # Define a dummy module with default False if import fails
     class DummySettings:
-        enableDiscordAdminAuth = False
+        enablePasswordAuth = False
+        enableIpAuth = False
+        authorizedAdminIPs = []
+        adminPassword = "watermelon"
 
     settings = DummySettings()
 
@@ -82,17 +85,7 @@ class CommandManager:
                     color=(0, 1, 0),
                 )
                 return True  # Verification successful
-            else:
-                if not player:
-                    print(
-                        f"Attempted to verify non-existent client_id: {client_id}"
-                    )
-                else:
-                    print(
-                        f"Attempted to verify client_id {client_id} but name mismatch "
-                        f"(Discord provided: '{shortname}', Game shows: '{player.getname(full=False, icon=False)}')"
-                    )
-                return False  # Verification failed
+            return False  # Verification failed
 
         except Exception as e:
             print(
@@ -138,6 +131,50 @@ class CommandManager:
         if not msg or not msg.strip():
             return None  # <- ignore empty messages completely
 
+        if msg.startswith("/login"):
+            parts = msg.split()
+
+            # usage check
+            if len(parts) < 2:
+                print(f"LOGIN: {client_id}: wrong cmd {msg}")
+                return None
+
+            entered_pass = parts[1]
+
+            actual_pass = getattr(settings, 'adminPassword', 'watermelon')
+
+            #password check
+            if entered_pass == actual_pass:
+                #get player name for storage
+                try:
+                    session = bs.get_foreground_host_session()
+                    player_name = "Unknown"
+                    if session:
+                        for p in session.sessionplayers:
+                            if p.inputdevice.client_id == client_id:
+                                player_name = p.getname(full=False, icon=False)
+                                break
+
+                    #Mark verified
+                    cls.mark_admin_verified(client_id, player_name)
+
+                except Exception as e:
+                    print(f"Login error: {e}")
+
+            else:
+                bs.broadcastmessage(
+                    "Incorrect Password",
+                    clients=[client_id],
+                    transient=True,
+                    color=(1,0,0)
+                )
+                print(f"{client_id}: wrong pass- {msg}")
+
+            #hide cmd from chat
+            return None
+
+
+        # standard cmds
         parts = msg.split()
         if not parts:
             return None
@@ -162,20 +199,10 @@ class CommandManager:
                     # settings checks
                     # default to False if settings are missing
                     ip_auth_enabled = getattr(settings, 'enableIpAuth', False)
-                    discord_auth_enabled = getattr(
-                        settings, 'enableDiscordAdminAuth', False
-                    )
-                    discord_integration_enabled = getattr(
-                        settings, 'enableDiscordIntegration', False
-                    )
-                    # Determine if Discord verification should actually be performed
-                    perform_discord_check = (
-                        discord_auth_enabled and discord_integration_enabled
-                    )
-
-                    # print(f"DEBUG: Discord auth enabled? {discord_auth_enabled}") # DEBUG 3
+                    password_auth_enabled = getattr(settings,'enablePasswordAuth', False)
                     # print(f"DEBUG: Current verified_admins dict: {cls.verified_admins}")
 
+                    # IP CHECK
                     if ip_auth_enabled:
                         # IP address check
                         try:
@@ -210,7 +237,9 @@ class CommandManager:
                                 color=(1, 0, 0),
                             )
                             return None  # Block command execution
-                    if perform_discord_check:
+
+                    # PASSWORD CHECK
+                    if password_auth_enabled:
                         # verification check
                         # Get the player's current shortname NOW
                         try:
@@ -245,13 +274,9 @@ class CommandManager:
                                 color=(1, 0.5, 0),
                             )
                             return None  # Block command execution
-                        else:
-                            print(
-                                f"DEBUG: is_admin_verified PASSED for client_id={client_id}, name='{current_shortname}'"
-                            )  # DEBUG 6
+                        # if we are here, verification passed
+                        pass
                         # --- END VERIFICATION CHECK ---
-
-                    # If we reach here, either auth is disabled, or they are verified correctly
                     # print(f"DEBUG: Executing command '{cmd}' for client_id {client_id}") # DEBUG PRINT 7
                     command()
 
