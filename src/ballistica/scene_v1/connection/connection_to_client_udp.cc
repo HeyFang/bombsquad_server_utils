@@ -178,7 +178,7 @@ auto ConnectionToClientUDP::GetClientIPAddress() const -> std::string {
   if (raw_ip.empty()) {
     return "N/A";
   }
-  return raw_ip;
+  // return raw_ip;
   // --- HASHING LOGIC ---
 
   // !! CHANGE THIS to your own random, secret string !!
