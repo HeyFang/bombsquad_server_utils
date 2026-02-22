@@ -798,6 +798,54 @@ static PyMethodDef PyGetClientIPAddressDef = {
     "Returns None if the client_id is invalid or the IP cannot be determined.",
 };
 
+// ----------------------- get_client_ping -----------------------------
+
+static PyObject* PyGetClientPing(PyObject* self, PyObject* args,
+                                 PyObject* keywds) {
+  BA_PYTHON_TRY;
+
+  int client_id;
+  static const char* kwlist[] = {"client_id", nullptr};
+
+  if (!PyArg_ParseTupleAndKeywords(args, keywds, "i",
+                                   const_cast<char**>(kwlist),
+                                   &client_id)) {
+    return nullptr;
+  }
+
+  auto* appmode = classic::ClassicAppMode::GetActiveOrThrow();
+
+  auto&& connection_iter{
+      appmode->connections()->connections_to_clients().find(client_id)};
+
+  if (connection_iter
+      == appmode->connections()->connections_to_clients().end()) {
+    Py_RETURN_NONE;
+  }
+
+  assert(connection_iter->second.exists());
+
+  ConnectionToClient* connection =
+      connection_iter->second.get();
+
+  float ping = connection->current_ping();
+
+  return PyFloat_FromDouble(ping);
+
+  BA_PYTHON_CATCH;
+}
+
+static PyMethodDef PyGetClientPingDef = {
+    "get_client_ping",            // name
+    (PyCFunction)PyGetClientPing, // method
+    METH_VARARGS | METH_KEYWORDS, // flags
+
+    "get_client_ping(client_id: int) -> float | None\n"
+    "\n"
+    "Return the current ping (RTT in ms) for a connected client.\n"
+    "Returns None if client_id is invalid.",
+};
+
 // ----------------------------- get_game_port ---------------------------------
 
 static auto PyGetGamePort(PyObject* self, PyObject* args) -> PyObject* {
@@ -1023,6 +1071,7 @@ auto PythonMethodsNetworking::GetMethods() -> std::vector<PyMethodDef> {
       PyDisconnectClientDef,
       PyGetClientPublicDeviceUUIDDef,
       PyGetClientIPAddressDef,
+      PyGetClientPingDef,
       PyGetConnectionToHostInfoDef,
       PyGetConnectionToHostInfo2Def,
       PyClientInfoQueryResponseDef,

@@ -83,6 +83,7 @@ from _bascenev1 import (
     Data,
     get_client_public_device_uuid,
     get_client_ip_address,
+    get_client_ping,
     disconnect_client,
     disconnect_from_host,
     emitfx,
@@ -311,6 +312,7 @@ __all__ = [
     'DieMessage',
     'get_client_public_device_uuid',
     'get_client_ip_address',
+    'get_client_ping'
     'disconnect_client',
     'disconnect_from_host',
     'displaytime',
