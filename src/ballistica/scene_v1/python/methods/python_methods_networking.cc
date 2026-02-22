@@ -17,6 +17,7 @@
 #include "ballistica/scene_v1/connection/connection_to_client.h"
 #include "ballistica/scene_v1/connection/connection_to_host_udp.h"
 #include "ballistica/scene_v1/python/scene_v1_python.h"
+#include "ballistica/shared/foundation/macros.h"
 #include "ballistica/shared/math/vector3f.h"
 #include "ballistica/shared/networking/sockaddr.h"
 #include "ballistica/shared/python/python.h"
@@ -296,9 +297,10 @@ static auto PySetAuthenticateClients(PyObject* self, PyObject* args,
                                      PyObject* keywds) -> PyObject* {
   BA_PYTHON_TRY;
   int enable;
+  int version;
   static const char* kwlist[] = {"enable", nullptr};
-  if (!PyArg_ParseTupleAndKeywords(args, keywds, "p",
-                                   const_cast<char**>(kwlist), &enable)) {
+  if (!PyArg_ParseTupleAndKeywords(
+          args, keywds, "p", const_cast<char**>(kwlist), &enable, &version)) {
     return nullptr;
   }
   auto* appmode = classic::ClassicAppMode::GetActiveOrThrow();
@@ -743,60 +745,6 @@ static PyMethodDef PyGetClientPublicDeviceUUIDDef = {
     "periodically with updates to the game or operating system.",
 };
 
-// ----------------------- get_client_ip_address -----------------------------
-
-static PyObject* PyGetClientIPAddress(PyObject* self, PyObject* args,
-                                      PyObject* keywds) {
-  BA_PYTHON_TRY;
-  int client_id;
-  static const char* kwlist[] = {"client_id", nullptr};
-  if (!PyArg_ParseTupleAndKeywords(args, keywds, "i",
-                                   const_cast<char**>(kwlist), &client_id)) {
-    return nullptr;
-  }
-  // Error if we're not in our app-mode.
-  auto* appmode = classic::ClassicAppMode::GetActiveOrThrow();
-
-  // Find the connection associated with the client_id
-  auto&& connection_iter{
-      appmode->connections()->connections_to_clients().find(client_id)};
-
-  // Does this connection exist?
-  if (connection_iter
-      == appmode->connections()->connections_to_clients().end()) {
-    Py_RETURN_NONE;  // No connection found for this client_id
-  }
-
-  // Connections should always be valid refs.
-  assert(connection_iter->second.exists());
-  ConnectionToClient* connection =
-      connection_iter->second.get();  // Get the raw pointer
-
-  // Call the C++ method we added earlier
-  std::string ip_address = connection->GetClientIPAddress();
-
-  // Return the result as a Python string, or None if empty/NA
-  if (ip_address.empty() || ip_address == "N/A") {
-    Py_RETURN_NONE;
-  } else {
-    return PyUnicode_FromString(ip_address.c_str());
-  }
-
-  BA_PYTHON_CATCH;
-}
-
-static PyMethodDef PyGetClientIPAddressDef = {
-    "get_client_ip_address",            // name
-    (PyCFunction)PyGetClientIPAddress,  // method
-    METH_VARARGS | METH_KEYWORDS,       // flags
-
-    "get_client_ip_address(client_id: int) -> str | None\n"
-    "\n"
-    "(internal)\n"
-    "\n"
-    "Return the IP address string for a connected client.\n"
-    "Returns None if the client_id is invalid or the IP cannot be determined.",
-};
 
 // ----------------------- get_client_ping -----------------------------
 
@@ -808,8 +756,7 @@ static PyObject* PyGetClientPing(PyObject* self, PyObject* args,
   static const char* kwlist[] = {"client_id", nullptr};
 
   if (!PyArg_ParseTupleAndKeywords(args, keywds, "i",
-                                   const_cast<char**>(kwlist),
-                                   &client_id)) {
+                                   const_cast<char**>(kwlist), &client_id)) {
     return nullptr;
   }
 
@@ -820,13 +767,12 @@ static PyObject* PyGetClientPing(PyObject* self, PyObject* args,
 
   if (connection_iter
       == appmode->connections()->connections_to_clients().end()) {
-    Py_RETURN_NONE;
+    return PyFloat_FromDouble(-1.0f);
   }
 
   assert(connection_iter->second.exists());
 
-  ConnectionToClient* connection =
-      connection_iter->second.get();
+  ConnectionToClient* connection = connection_iter->second.get();
 
   float ping = connection->current_ping();
 
@@ -836,15 +782,14 @@ static PyObject* PyGetClientPing(PyObject* self, PyObject* args,
 }
 
 static PyMethodDef PyGetClientPingDef = {
-    "get_client_ping",            // name
-    (PyCFunction)PyGetClientPing, // method
-    METH_VARARGS | METH_KEYWORDS, // flags
+    "get_client_ping",             // name
+    (PyCFunction)PyGetClientPing,  // method
+    METH_VARARGS | METH_KEYWORDS,  // flags
 
-    "get_client_ping(client_id: int) -> float | None\n"
+    "get_client_ping(client_id: int) -> float\n"
     "\n"
     "Return the current ping (RTT in ms) for a connected client.\n"
-    "Returns None if client_id is invalid.",
-};
+    "Returns -1.0 if client_id is invalid.\n"};
 
 // ----------------------------- get_game_port ---------------------------------
 
@@ -922,7 +867,7 @@ static PyMethodDef PyHostScanCycleDef = {
     (PyCFunction)PyHostScanCycle,  // method
     METH_VARARGS | METH_KEYWORDS,  // flags
 
-    "host_scan_cycle() -> list\n"
+    "host_scan_cycle() -> list[dict[str, str]]\n"
     "\n"
     "(internal)\n"
     "\n"
@@ -1070,7 +1015,10 @@ auto PythonMethodsNetworking::GetMethods() -> std::vector<PyMethodDef> {
       PyDisconnectFromHostDef,
       PyDisconnectClientDef,
       PyGetClientPublicDeviceUUIDDef,
+<<<<<<< HEAD
       PyGetClientIPAddressDef,
+=======
+>>>>>>> main
       PyGetClientPingDef,
       PyGetConnectionToHostInfoDef,
       PyGetConnectionToHostInfo2Def,
