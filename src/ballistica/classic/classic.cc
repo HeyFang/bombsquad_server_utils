@@ -4,7 +4,9 @@
 
 #include <string>
 #include <vector>
+#include <Python.h>
 
+#include "ballistica/core/python/core_python.h"
 #include "ballistica/classic/python/classic_python.h"
 #include "ballistica/classic/support/stress_test.h"
 #include "ballistica/classic/support/v1_account.h"
@@ -200,8 +202,37 @@ void ClassicFeatureSet::SetV1DeviceAccount(const std::string& name) {
   } else {
     acc_type = classic::V1AccountType::kDevice;
   }
+
+  std::string CustomHostName = "Server";
+
+// import bautils.settings
+PyObject* module = PyImport_ImportModule("bautils.settings");
+
+if (module) {
+  PyObject* attr = PyObject_GetAttrString(module, "hostName");
+
+  if (attr && PyUnicode_Check(attr)) {
+    const char* name = PyUnicode_AsUTF8(attr);
+
+    if (name && std::strlen(name) > 0) {
+      std::string candidate(name);
+
+      // basic validation:
+      if (candidate.length() <= 32 &&
+          candidate.find_first_of("\n\r\t") == std::string::npos) {
+        CustomHostName = candidate;
+      }
+    }
+  }
+
+  Py_XDECREF(attr);
+  Py_DECREF(module);
+} else {
+  PyErr_Clear();
+}
+
   g_classic->v1_account->PushSetV1LoginCall(
-      acc_type, classic::V1LoginState::kSignedIn, name,
+      acc_type, classic::V1LoginState::kSignedIn, CustomHostName,
       g_core->platform->GetDeviceV1AccountID());
 }
 

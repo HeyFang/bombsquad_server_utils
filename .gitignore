@@ -37,6 +37,9 @@ tools/cloudshell
 tools/bacloud
 **/.#*
 
+# fang
+deploy-server.sh
+
 # Environment files
 /venv
 

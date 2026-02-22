@@ -12,6 +12,7 @@ enableDiscordAdminAuth: bool = False
 
 # ---- BS SERVER SETTINGS ----
 enableStatsLog: bool = True
+hostName = "Cyklons"
 
 # ---- PASSWORD AUTH SETTINGS ----
 enablePasswordAuth: bool = True
