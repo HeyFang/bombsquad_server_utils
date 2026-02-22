@@ -26,31 +26,43 @@ class List(ServerCommand):
     def on_command_call(self) -> None:
 
         # Build and broadcast a clean ASCII player list table.
-        header = "{0:^4} | {1:<16} | {2:^8}"
-        separator = "-" * 50
+        header = "{0:^9} | {1:<16} | {2:^6}"
+        separator = "-" * 40
 
         lines = []
         lines.append(separator)
-        lines.append(header.format("No.", "Name", "ClientID"))
+        lines.append(header.format("ClientID", "Name", "Ping"))
         lines.append(separator)
 
         session = bs.get_foreground_host_session()
         assert session is not None
 
-        for index, player in enumerate(session.sessionplayers, start=1):
+        for player in session.sessionplayers:
+            client_id = player.inputdevice.client_id
+
+            # Get ping safely
+            try:
+                ping = bs.get_client_ping(client_id)
+                ping = f"{int(ping)}ms" if ping is not None else "-"
+            except Exception:
+                ping = "-"
+
             lines.append(
                 header.format(
-                    index,
+                    client_id,
                     player.getname(icon=True),
-                    player.inputdevice.client_id,
+                    ping,
                 )
             )
 
         lines.append(separator)
         _list = "\n".join(lines)
 
-        bs.broadcastmessage(_list, transient=True, clients=[self.client_id])
-
+        bs.broadcastmessage(
+            _list,
+            transient=True,
+            clients=[self.client_id],
+        )
     @override
     def admin_authentication(self) -> bool:
         return False
