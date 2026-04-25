@@ -16,7 +16,7 @@ from typing import Dict, Any, TYPE_CHECKING
 if TYPE_CHECKING:
     from typing import Dict, Any
 
-print("[StatsLogger] Importing stats_logger plugin...")
+# print("[StatsLogger] Importing stats_logger plugin...")
 
 
 # ---------------------------------------------------------------------
@@ -67,7 +67,7 @@ class StatsLoggerPlugin(ba.Plugin):
         except Exception:
             print("[StatsLogger] ERROR installing end-game patches:")
 
-        print("[StatsLogger] Plugin loaded successfully.")
+        # print("[StatsLogger] Plugin loaded successfully.")
 
     def _patch_game_end(self) -> None:
         """Wrap bascenev1.Activity.end (some flows call this directly)."""
@@ -166,10 +166,10 @@ class StatsLoggerPlugin(ba.Plugin):
                     kills = record.accum_kill_count
                     deaths = record.accum_killed_count
 
-                    print(
-                        f"[StatsLogger] Found record for {sp_name}: "
-                        f"Score={score}, Kills={kills}, Deaths={deaths}"
-                    )
+                    # print(
+                    #     f"[StatsLogger] Found record for {sp_name}: "
+                    #     f"Score={score}, Kills={kills}, Deaths={deaths}"
+                    # )
                 else:
                     print("PlayerRecord: <NONE> for ", sp_name)
 
@@ -199,7 +199,7 @@ class StatsLoggerPlugin(ba.Plugin):
                     "games": 1,
                 }
                 changed = True
-                print(f"[StatsLogger] Will store: {short_name} ({acc_id})")
+                # print(f"[StatsLogger] Will store: {short_name} ({acc_id})")
             else:
                 # Ensure existing keys are present (for backwards compatibility if stats.json format changes)
                 prev.setdefault("score", 0)
@@ -220,17 +220,17 @@ class StatsLoggerPlugin(ba.Plugin):
                 # check if stats actually changed
                 if score > 0 or kills > 0 or deaths > 0:
                     changed = True
-                    print(
-                        f"[StatsLogger] Updating stats for: {short_name} ({acc_id}): "
-                        f"Score+{score}, Kills+{kills}, Deaths+{deaths}"
-                    )
-                else:
-                    print(
-                        f"[StatsLogger] No stat changes for: {short_name} ({acc_id})"
-                    )
+                    # print(
+                    #     f"[StatsLogger] Updating stats for: {short_name} ({acc_id}): "
+                    #     f"Score+{score}, Kills+{kills}, Deaths+{deaths}"
+                    # )
+                 #else:
+                    # print(
+                    #     f"[StatsLogger] No stat changes for: {short_name} ({acc_id})"
+                    # )
 
         if changed:
             _save_json(self.stats_path, stats)
-            print("[StatsLogger] stats.json updated.")
-        else:
-            print("[StatsLogger] No changes; stats.json not updated.")
+            # print("[StatsLogger] stats.json updated.")
+        #else:
+            # print("[StatsLogger] No changes; stats.json not updated.")

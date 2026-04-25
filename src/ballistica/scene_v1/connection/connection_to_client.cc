@@ -1039,7 +1039,7 @@ void ConnectionToClient::HandleMasterServerClientInfo(PyObject* info_obj) {
       Error("");
     }
   }
-  got_info_from_master_server_ = true;
+  got_v1_auth_from_master_server_ = true;
 
   // g_core->logging->Log(LogName::kBaNetworking, LogLevel::kError, [this] {
   //   std::string info = "\n=== NEW PLAYER CONNECTED - FULL DUMP ===\n";
@@ -1111,12 +1111,12 @@ void ConnectionToClient::HandleMasterServerClientInfo(PyObject* info_obj) {
         "ba_data/python/bautils/players/player_log.json";
 
     // --- Get the key fields for the current player ---
-    std::string current_pb_id = peer_public_account_id_;
+    std::string current_account_id = peer_public_account_id_;
     std::string current_device_id =
         public_device_id_;  // Get the current device ID
 
     // If they don't have a pb-id (guest account?), we still skip logging.
-    if (current_pb_id.empty()) {
+    if (current_account_id.empty()) {
       g_core->logging->Log(
           LogName::kBaNetworking, LogLevel::kWarning,
           "Player has no public_account_id; skipping JSON log.");
@@ -1149,20 +1149,20 @@ void ConnectionToClient::HandleMasterServerClientInfo(PyObject* info_obj) {
       int array_size = cJSON_GetArraySize(root_array);
       for (int i = 0; i < array_size; ++i) {
         cJSON* item = cJSON_GetArrayItem(root_array, i);
-        cJSON* existing_pb_id_json =
+        cJSON* existing_account_id_json =
             cJSON_GetObjectItem(item, "public_account_id");
         cJSON* existing_device_id_json = cJSON_GetObjectItem(
             item, "public_device_id");  // Get existing device ID
 
         // Check if both fields exist and are strings
-        if (existing_pb_id_json && cJSON_IsString(existing_pb_id_json)
+        if (existing_account_id_json && cJSON_IsString(existing_account_id_json)
             && existing_device_id_json
             && cJSON_IsString(existing_device_id_json)) {
-          std::string existing_pb_id(existing_pb_id_json->valuestring);
+          std::string existing_account_id(existing_account_id_json->valuestring);
           std::string existing_device_id(existing_device_id_json->valuestring);
 
           // *** Check if BOTH pb_id AND device_id match ***
-          if (existing_pb_id == current_pb_id
+          if (existing_account_id == current_account_id
               && existing_device_id == current_device_id) {
             match_index = i;
             break;  // Found a match, stop searching
@@ -1173,7 +1173,7 @@ void ConnectionToClient::HandleMasterServerClientInfo(PyObject* info_obj) {
       // 3. Create the *internal* player data object
       cJSON* player_obj = cJSON_CreateObject();
       cJSON_AddStringToObject(player_obj, "public_account_id",
-                              current_pb_id.c_str());
+                              current_account_id.c_str());
       cJSON_AddStringToObject(
           player_obj, "public_device_id",
           current_device_id.c_str());  // Ensure device_id is included
