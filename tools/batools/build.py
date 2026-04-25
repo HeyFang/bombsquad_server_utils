@@ -9,7 +9,6 @@ import sys
 import socket
 import subprocess
 from enum import Enum
-from pathlib import Path
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, assert_never
 
@@ -257,7 +256,6 @@ def lazybuild(target: str, category: LazyBuildCategory, command: str) -> None:
                 'Makefile',
                 'tools',
                 'src/assets',
-                'src/external/python-apple',
                 '.efrocachemap',
                 # Needed to rebuild on asset-package changes.
                 'config/projectconfig.json',
@@ -528,7 +526,7 @@ def _get_server_config_template_toml(projroot: str) -> str:
     cfg.unclean_exit_minutes = 90
     cfg.idle_exit_minutes = 20
     cfg.admins = ['a-YOUR-ID-HERE', 'a-ANOTHER-ID-HERE']
-    cfg.protocol_version = 36
+    cfg.protocol_version = 37
     cfg.session_max_players_override = 8
     cfg.playlist_inline = []
     cfg.team_names = ('Red', 'Blue')
@@ -602,13 +600,44 @@ def filter_server_config_toml(projroot: str, infilepath: str) -> str:
     )
 
 
+def _cmake_cache_has_missing_cellar_path(dirname: str) -> bool:
+    """Return whether any Homebrew Cellar paths in a cmake cache are gone.
+
+    CMake resolves pkg-config results to versioned Cellar paths at configure
+    time. When homebrew updates a package the old versioned path is removed,
+    causing linker errors on the next build. Scanning CMakeCache.txt for any
+    path matching ``*/Cellar/<pkg>/<ver>`` and checking whether it still
+    exists on disk catches all affected packages automatically without
+    needing to enumerate them individually. No-op on Linux, where packages
+    live at stable paths with no Cellar directories.
+    """
+    import re
+
+    cmake_cache_path = os.path.join(dirname, 'CMakeCache.txt')
+    if not os.path.isfile(cmake_cache_path):
+        return False
+    with open(cmake_cache_path, encoding='utf-8') as cache_file:
+        cache_text = cache_file.read()
+    for cellar_path in sorted(
+        set(re.findall(r'/[^\s;]+/Cellar/[^/\s;]+/[^/\s;]+', cache_text))
+    ):
+        if not os.path.isdir(cellar_path):
+            print(
+                f'{Clr.BLU}Homebrew Cellar path no longer exists:'
+                f' {cellar_path}; package was likely updated.'
+                f' Clearing existing build at "{dirname}" to'
+                f' avoid stale cmake cache linker errors.{Clr.RST}'
+            )
+            return True
+    return False
+
+
 def cmake_prep_dir(dirname: str, verbose: bool = False) -> None:
     """Create a dir, recreating it when cmake/python/etc. versions change.
 
     Useful to prevent builds from breaking when cmake or other components
     are updated.
     """
-    # pylint: disable=too-many-locals
     import json
 
     from efrotools.pyver import PYVER
@@ -672,13 +701,6 @@ def cmake_prep_dir(dirname: str, verbose: bool = False) -> None:
     )
     entries.append(Entry('mac_xcode_sdks', mac_xcode_sdks))
 
-    # ...or if homebrew SDL.h resolved path changes (happens for updates)
-    sdl_h_path = Path('/opt/homebrew/include/SDL2/SDL.h')
-    homebrew_sdl_h_resolved: str = (
-        str(sdl_h_path.resolve()) if sdl_h_path.exists() else ''
-    )
-    entries.append(Entry('homebrew_sdl_h_resolved', homebrew_sdl_h_resolved))
-
     # Ok; do the thing.
     verfilename = os.path.join(dirname, '.ba_cmake_env')
     title = 'cmake_prep_dir'
@@ -703,6 +725,9 @@ def cmake_prep_dir(dirname: str, verbose: bool = False) -> None:
             )
             changed = True
             break
+
+    if not changed:
+        changed = _cmake_cache_has_missing_cellar_path(dirname)
 
     if changed:
         if verbose:

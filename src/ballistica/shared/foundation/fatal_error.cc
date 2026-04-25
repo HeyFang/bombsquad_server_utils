@@ -7,7 +7,8 @@
 
 #include "ballistica/core/core.h"
 #include "ballistica/core/logging/logging.h"
-#include "ballistica/core/platform/core_platform.h"
+#include "ballistica/core/platform/platform.h"
+#include "ballistica/core/python/core_python.h"
 #include "ballistica/core/support/base_soft.h"
 #include "ballistica/shared/generic/lambda_runnable.h"
 #include "ballistica/shared/generic/native_stack_trace.h"
@@ -46,6 +47,15 @@ void FatalErrorHandling::ReportFatalError(const std::string& message,
     return;
   }
   reported_ = true;
+
+  // If we died before the Python LogHandler came up (e.g. during
+  // baenv.configure itself), any C++ log calls we made are still sitting
+  // in the early-log buffer. Drop them to stderr/platform-log now so
+  // they aren't silently lost along with whatever context they'd
+  // provide.
+  if (g_core && g_core->python) {
+    g_core->python->DrainEarlyLogsToStderr();
+  }
 
   // Our main goal here varies based off whether we are an unmodified
   // blessed build. If we are, our main goal is to communicate as much info
@@ -123,8 +133,7 @@ void FatalErrorHandling::ReportFatalError(const std::string& message,
   if (g_core) {
     g_core->logging->V1CloudLog(logmsg);
     g_core->logging->EmitLog("root", LogLevel::kCritical,
-                             core::CorePlatform::TimeSinceEpochSeconds(),
-                             logmsg);
+                             core::Platform::TimeSinceEpochSeconds(), logmsg);
   }
 
   fprintf(stderr, "%s\n", logmsg.c_str());
@@ -152,7 +161,7 @@ void FatalErrorHandling::ReportFatalError(const std::string& message,
     if (result != 0) {
       break;
     }
-    core::CorePlatform::SleepMillisecs(100);
+    core::Platform::SleepMillisecs(100);
   }
 }
 
@@ -186,15 +195,15 @@ void FatalErrorHandling::DoBlockingFatalErrorDialog(
     // There's a chance that it can't (if threads are suspended, if it is
     // blocked on a synchronous call to another thread, etc.) so if we don't
     // see something happening soon, just give up on showing a dialog.
-    auto starttime = core::CorePlatform::TimeMonotonicMillisecs();
+    auto starttime = core::Platform::TimeMonotonicMillisecs();
     while (!started) {
-      if (core::CorePlatform::TimeMonotonicMillisecs() - starttime > 3000) {
+      if (core::Platform::TimeMonotonicMillisecs() - starttime > 3000) {
         return;
       }
-      core::CorePlatform::SleepMillisecs(10);
+      core::Platform::SleepMillisecs(10);
     }
     while (!finished) {
-      core::CorePlatform::SleepMillisecs(10);
+      core::Platform::SleepMillisecs(10);
     }
   }
 }
@@ -216,7 +225,7 @@ auto FatalErrorHandling::HandleFatalError(
     if (exit_cleanly) {
       if (g_core) {
         g_core->logging->EmitLog("root", LogLevel::kCritical,
-                                 core::CorePlatform::TimeSinceEpochSeconds(),
+                                 core::Platform::TimeSinceEpochSeconds(),
                                  "Calling exit(1)...");
 
         // Inform anyone who cares that the engine is going down NOW.
@@ -233,7 +242,7 @@ auto FatalErrorHandling::HandleFatalError(
     } else {
       if (g_core) {
         g_core->logging->EmitLog("root", LogLevel::kCritical,
-                                 core::CorePlatform::TimeSinceEpochSeconds(),
+                                 core::Platform::TimeSinceEpochSeconds(),
                                  "Calling abort()...");
       }
       abort();

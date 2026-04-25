@@ -19,6 +19,7 @@ from efrotools import pcommand
 # in modules rather than inline here because we'll be able to load them
 # via pyc. pylint: disable=unused-import
 from efrotools.pcommands import (
+    efrosync,
     formatcode,
     formatscripts,
     formatmakefile,
@@ -31,15 +32,9 @@ from efrotools.pcommands import (
     mypy_files,
     dmypy,
     tool_config_install,
-    sync,
-    sync_all,
     scriptfiles,
-    pycharm,
-    clioncode,
     androidstudiocode,
     makefile_target_list,
-    spelling,
-    spelling_all,
     pytest,
     echo,
     copy_win_extra_file,
@@ -72,6 +67,7 @@ from efrotools.pcommands2 import (
     pcommandbatch_speed_test,
     null,
 )
+from bacommontools.pcommands import bacurl, require_ballistica_api_key
 from batools.pcommands import (
     resize_image,
     check_clean_safety,
@@ -83,18 +79,19 @@ from batools.pcommands import (
     printcolors,
     prune_includes,
     python_version_android,
-    python_version_apple,
-    python_build_apple,
+    static_dependencies_build_debug,
     python_version_android_base,
-    python_build_apple_debug,
-    python_build_android,
-    python_build_android_debug,
-    python_android_patch,
-    python_android_patch_ssl,
-    python_apple_patch,
+    python_build_android_old,
+    python_build_android_old_debug,
+    python_android_build,
+    python_android_build_debug,
+    python_android_gather,
+    python_build_apple,
+    python_apple_gather,
+    python_android_patch_old,
+    python_android_patch_ssl_old,
     python_gather,
-    python_gather_apple,
-    python_gather_android,
+    python_gather_android_old,
     python_winprune,
     capitalize,
     upper,
@@ -114,7 +111,6 @@ from batools.pcommands import (
     update_project,
     cmake_prep_dir,
     gen_binding_code,
-    gen_flat_data_code,
     genchangelog,
     get_changelog,
     android_sdk_utils,
@@ -143,6 +139,7 @@ from batools.pcommands2 import (
     cst_test,
 )
 from batools.pcommands3 import (
+    test_game_run,
     compose_docker_gui_release,
     compose_docker_gui_debug,
     compose_docker_server_release,
@@ -154,7 +151,9 @@ from batools.pcommands3 import (
     save_docker_images,
     remove_docker_images,
     generate_flathub_manifest,
+    gen_pyembed,
 )
+from batools._automation import test_game_cmd
 
 # pylint: enable=unused-import
 

@@ -17,6 +17,7 @@
 #include "ballistica/base/python/methods/python_methods_base_1.h"
 #include "ballistica/base/python/methods/python_methods_base_2.h"
 #include "ballistica/base/python/methods/python_methods_base_3.h"
+#include "ballistica/base/python/methods/python_methods_test.h"
 #include "ballistica/core/core.h"
 #include "ballistica/shared/python/python_command.h"  // IWYU pragma: keep.
 #include "ballistica/shared/python/python_module_builder.h"
@@ -33,6 +34,7 @@ extern "C" auto PyInit__babase() -> PyObject* {
                                   PythonMethodsBase1::GetMethods(),
                                   PythonMoethodsBase3::GetMethods(),
                                   PythonMethodsBase2::GetMethods(),
+                                  PythonMethodsTest::GetMethods(),
                               },
                               [](PyObject* module) -> int {
                                 BA_PYTHON_TRY;
@@ -186,6 +188,19 @@ void BasePython::OnAppShutdown() {
 void BasePython::OnAppShutdownComplete() {
   assert(g_base->InLogicThread());
   objs().Get(ObjID::kAppOnNativeShutdownCompleteCall).Call();
+}
+
+auto BasePython::ShutdownFaultHandlerArm() -> double {
+  assert(g_base->InLogicThread());
+  return objs()
+      .Get(ObjID::kAppShutdownFaultHandlerArmCall)
+      .Call()
+      .ValueAsDouble();
+}
+
+void BasePython::ShutdownFaultHandlerDisarm() {
+  assert(g_base->InLogicThread());
+  objs().Get(ObjID::kAppShutdownFaultHandlerDisarmCall).Call();
 }
 
 void BasePython::ApplyAppConfig() { assert(g_base->InLogicThread()); }

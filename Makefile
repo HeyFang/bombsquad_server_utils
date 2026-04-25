@@ -62,13 +62,37 @@ ENV_REQS_POST_UPDATE_ONLY = $(ENV_COMPILE_COMMANDS_DB)
 
 # Target that should be built before building almost any other target. This
 # installs tool config files, sets up the Python virtual environment, etc.
-env: $(ENV_REQS_SAFE) $(ENV_REQS_POST_UPDATE_ONLY)
+env: $(ENV_REQS_SAFE) $(ENV_REQS_POST_UPDATE_ONLY) config/localconfig.json
 
 # Set of prereqs safe to run if the project state is dirty.
-env-pre-update: $(ENV_REQS_SAFE)
+env-pre-update: $(ENV_REQS_SAFE) config/localconfig.json
 
 env-clean:
 	rm -rf $(ENV_REQS_SAFE) $(ENV_REQS_POST_UPDATE_ONLY)
+
+# Bootstrap config/localconfig.json on first run so env is always
+# satisfied. In a worktree we try to mirror the main checkout's file
+# (following any existing symlink to its ultimate target); otherwise
+# we create an empty JSON dict, which is behaviorally equivalent to
+# no file for any code path that reads values via getlocalconfig()
+# (returns {} for missing keys). This is a normal file target so
+# make skips it entirely after the first run, leaving zero per-
+# invocation overhead for the common env dependency.
+config/localconfig.json:
+	@GITDIR=$$(git rev-parse --git-dir 2>/dev/null); \
+	 CMNDIR=$$(git rev-parse --git-common-dir 2>/dev/null); \
+	 if [ -n "$$GITDIR" ] && [ "$$GITDIR" != "$$CMNDIR" ]; then \
+	   MAINROOT=$$(cd "$$(dirname "$$CMNDIR")" && pwd); \
+	   SRC="$$MAINROOT/config/localconfig.json"; \
+	   if [ -e "$$SRC" ]; then \
+	     TARGET=$$(readlink "$$SRC" 2>/dev/null || echo "$$SRC"); \
+	     ln -s "$$TARGET" $@; \
+	     echo "Auto-linked $@ -> $$TARGET (from main checkout)."; \
+	     exit 0; \
+	   fi; \
+	 fi; \
+	 echo '{}' > $@; \
+	 echo "Created empty $@ (no main-checkout source found)."
 
 # Build all assets for all platforms.
 assets: env meta
@@ -79,11 +103,6 @@ assets: env meta
 assets-cmake: env meta
 	@$(PCOMMAND) lazybuild assets_src $(LAZYBUILDDIR)/$@ \
  cd src/assets \&\& $(MAKE) -j$(CPUS) cmake
-
-# Build only script assets for cmake builds (linux, mac).
-assets-cmake-scripts: env meta
-	@$(PCOMMAND) lazybuild assets_src $(LAZYBUILDDIR)/$@ \
- cd src/assets \&\& $(MAKE) -j$(CPUS) scripts-cmake
 
 # Build assets required for server builds.
 assets-server: env meta
@@ -192,6 +211,11 @@ venv-clean:
 docs: env
 	@$(PCOMMAND) gen_docs_sphinx
 
+# Cloud version of docs
+docs-cloud:
+	@tools/cloudshell $(CLOUDSHELL_HOST_TEST) --env $(CLOUDSHELL_ENV_CHECK) \
+ --instance docs -- make docs
+
 docs-clean:
 	rm -rf .cache/sphinx
 	rm -rf .cache/sphinxfiltered
@@ -202,7 +226,7 @@ pcommandbatch_speed_test: env
 
 # Tell make which of these targets don't represent files.
 .PHONY: help env env-pre-update env-clean assets assets-cmake			\
-        assets-cmake-scripts assets-windows assets-windows-Win32							\
+        assets-windows assets-windows-Win32													\
         assets-windows-x64 assets-mac assets-ios assets-android assets-clean	\
         resources resources-clean meta meta-clean clean clean-list						\
         dummymodules venv venv-clean docs docs-clean pcommandbatch_speed_test
@@ -861,14 +885,6 @@ dmypy-stop: py_check_prepass
 pyright: py_check_prepass
 	@$(PCOMMAND) pyright
 
-# Run PyCharm checks on all Python code.
-pycharm: py_check_prepass
-	@$(PCOMMAND) pycharm
-
-# Run PyCharm checks without caching (all files are checked).
-pycharm-full: py_check_prepass
-	@$(PCOMMAND) pycharm -full
-
 # Build prerequisites needed for python checks.
 #
 # IMPORTANT - this target may kick off new meta/asset/binary builds/cleans as
@@ -886,7 +902,7 @@ py_check_prepass: dummymodules
 # Tell make which of these targets don't represent files.
 .PHONY: check check-full check-ex check-ex-full cpplint cpplint-full pylint		\
         pylint-ex pylint-full pylint-ex-full mypy mypy-full dmypy dmypy-stop	\
-        pycharm pycharm-full py_check_prepass
+        py_check_prepass
 
 
 ################################################################################
@@ -950,6 +966,16 @@ test-threadpool:
 # Tell make which of these targets don't represent files.
 .PHONY: test test-ex test-ex-verbose test-full test-ex-full \
         test-message test-dataclassio test-rpc
+
+# Run live-server tests for the public REST API (accounts, workspaces).
+# Requires a running dev server; reads ballistica_api_key from config/localconfig.json.
+BALLISTICA_URL ?= https://dev.ballistica.net
+test-restapi: env
+	@$(PCOMMAND) require_ballistica_api_key
+	@$(PCOMMAND) pytest -v tests/test_restapi
+
+# Tell make which of these targets don't represent files.
+.PHONY: test-restapi
 
 
 ################################################################################
@@ -1094,41 +1120,46 @@ windows-clean-list: env
 CMAKE_BUILD_TYPE ?= Debug
 CMAKE_EXTRA_ARGS ?=
 
+# Optional suffix appended to the cmake build dir. Used by ex-flavor targets
+# (cmake-build-ex, etc.) to keep parallel build trees isolated from vanilla
+# ones. Leave empty for the default build.
+CMAKE_BUILD_SUFFIX ?=
+CMAKE_BUILD_DIR = build/cmake/$(CM_BT_LC)$(CMAKE_BUILD_SUFFIX)
+
 # Build and run the cmake build.
 cmake: cmake-build
-	cd build/cmake/$(CM_BT_LC)/staged && ./ballisticakit
+	cd $(CMAKE_BUILD_DIR)/staged && ./ballisticakit
 
 # Build and run the cmake build under the gdb debugger.
 # Sets up the ballistica environment to do things like abort() out to the
 # debugger on errors instead of trying to cleanly exit.
 cmake-gdb: cmake-build
-	cd build/cmake/$(CM_BT_LC)/staged && \
+	cd $(CMAKE_BUILD_DIR)/staged && \
       BA_DEBUGGER_ATTACHED=1 gdb ./ballisticakit
 
 # Build and run the cmake build under the lldb debugger.
 # Sets up the ballistica environment to do things like abort() out to the
 # debugger on errors instead of trying to cleanly exit.
 cmake-lldb: cmake-build
-	cd build/cmake/$(CM_BT_LC)/staged && \
+	cd $(CMAKE_BUILD_DIR)/staged && \
       BA_DEBUGGER_ATTACHED=1 lldb ./ballisticakit
 
 # Build but don't run it.
 cmake-build: assets-cmake resources cmake-binary
-	@$(STAGE_BUILD) -cmake -$(CM_BT_LC) -builddir build/cmake/$(CM_BT_LC) \
-      build/cmake/$(CM_BT_LC)/staged
-	@$(PCOMMANDBATCH) echo BLD Build complete: BLU build/cmake/$(CM_BT_LC)/staged
+	@$(STAGE_BUILD) -cmake -$(CM_BT_LC) -builddir $(CMAKE_BUILD_DIR) \
+      $(CMAKE_BUILD_DIR)/staged
+	@$(PCOMMANDBATCH) echo BLD Build complete: BLU $(CMAKE_BUILD_DIR)/staged
 
 cmake-binary: meta
-	@$(PCOMMAND) cmake_prep_dir build/cmake/$(CM_BT_LC)
-	@cd build/cmake/$(CM_BT_LC) && test -f Makefile \
-      || cmake -DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE) $(CMAKE_EXTRA_ARGS)\
-      $(shell pwd)/ballisticakit-cmake
+	@$(PCOMMAND) cmake_prep_dir $(CMAKE_BUILD_DIR)
+	@cd $(CMAKE_BUILD_DIR) && test -f Makefile \
+      || cmake -DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE) $(CMAKE_EXTRA_ARGS) -DENABLE_AUTOMATION=ON $(shell pwd)/ballisticakit-cmake
 	@tools/pcommand update_cmake_prefab_lib standard $(CM_BT_LC) \
       build/cmake/$(CM_BT_LC)
-	@cd build/cmake/$(CM_BT_LC) && $(MAKE) -j$(CPUS) ballisticakitbin
+	@cd $(CMAKE_BUILD_DIR) && $(MAKE) -j$(CPUS) ballisticakitbin
 
 cmake-clean:
-	rm -rf build/cmake/$(CM_BT_LC)
+	rm -rf $(CMAKE_BUILD_DIR)
 
 cmake-server: cmake-server-build
 	cd build/cmake/server-$(CM_BT_LC)/staged && ./ballisticakit_server
@@ -1143,8 +1174,7 @@ cmake-server-build: assets-server meta cmake-server-binary
 cmake-server-binary: meta
 	@$(PCOMMAND) cmake_prep_dir build/cmake/server-$(CM_BT_LC)
 	@cd build/cmake/server-$(CM_BT_LC) && test -f Makefile \
-      || cmake -DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE) $(CMAKE_EXTRA_ARGS) -DHEADLESS=true \
-      $(shell pwd)/ballisticakit-cmake
+      || cmake -DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE) $(CMAKE_EXTRA_ARGS) -DHEADLESS=true -DENABLE_AUTOMATION=ON $(shell pwd)/ballisticakit-cmake
 	@tools/pcommand update_cmake_prefab_lib server $(CM_BT_LC) \
       build/cmake/server-$(CM_BT_LC)
 	@cd build/cmake/server-$(CM_BT_LC) && $(MAKE) -j$(CPUS) ballisticakitbin
@@ -1165,8 +1195,7 @@ cmake-modular: cmake-modular-build
 cmake-modular-binary: meta
 	@$(PCOMMAND) cmake_prep_dir build/cmake/modular-$(CM_BT_LC)
 	@cd build/cmake/modular-$(CM_BT_LC) && test -f Makefile \
-      || cmake -DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE) $(CMAKE_EXTRA_ARGS) \
-      $(shell pwd)/ballisticakit-cmake
+      || cmake -DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE) $(CMAKE_EXTRA_ARGS) -DENABLE_AUTOMATION=ON $(shell pwd)/ballisticakit-cmake
 	@tools/pcommand update_cmake_prefab_lib standard $(CM_BT_LC) \
       build/cmake/modular-$(CM_BT_LC)
 	@cd build/cmake/modular-$(CM_BT_LC) && $(MAKE) -j$(CPUS) ballisticakitso
@@ -1187,8 +1216,7 @@ cmake-modular-server-build: assets-server meta cmake-modular-server-binary
 cmake-modular-server-binary: meta
 	@$(PCOMMAND) cmake_prep_dir build/cmake/modular-server-$(CM_BT_LC)
 	@cd build/cmake/modular-server-$(CM_BT_LC) && test -f Makefile \
-      || cmake -DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE) $(CMAKE_EXTRA_ARGS) -DHEADLESS=true \
-      $(shell pwd)/ballisticakit-cmake
+      || cmake -DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE) $(CMAKE_EXTRA_ARGS) -DHEADLESS=true -DENABLE_AUTOMATION=ON $(shell pwd)/ballisticakit-cmake
 	@tools/pcommand update_cmake_prefab_lib server $(CM_BT_LC) \
       build/cmake/modular-server-$(CM_BT_LC)
 	@cd build/cmake/modular-server-$(CM_BT_LC) && $(MAKE) \
@@ -1197,17 +1225,12 @@ cmake-modular-server-binary: meta
 cmake-modular-server-clean:
 	rm -rf build/cmake/modular-server-$(CM_BT_LC)
 
-# Stage assets for building/running within CLion.
-clion-staging: assets-cmake resources meta
-	@$(STAGE_BUILD) -cmake -debug build/clion_debug
-	@$(STAGE_BUILD) -cmake -release build/clion_release
-
 # Tell make which of these targets don't represent files.
 .PHONY: cmake cmake-build cmake-clean cmake-server cmake-server-build	\
         cmake-server-clean cmake-modular-build cmake-modular					\
         cmake-modular-binary cmake-modular-clean cmake-modular-server	\
         cmake-modular-server-build cmake-modular-server-binary				\
-        cmake-modular-server-clean clion-staging
+        cmake-modular-server-clean
 
 
 ################################################################################
@@ -1353,7 +1376,7 @@ tools/cloudshell: tools/efrotools/genwrapper.py .venv/.efro_venv_complete
 tools/bacloud: tools/efrotools/genwrapper.py .venv/.efro_venv_complete
 	@echo Generating tools/bacloud...
 	@PYTHONPATH=tools python3 -m \
- efrotools.genwrapper bacloud batools.bacloud tools/bacloud
+ efrotools.genwrapper bacloud bacommontools.bacloud tools/bacloud
 
 .clang-format: config/toolconfigsrc/clang-format $(TOOL_CFG_SRC)
 	@$(TOOL_CFG_INST) $< $@
@@ -1453,12 +1476,15 @@ WSLW=BA_WSL_TARGETS_WINDOWS=1
 VISUAL_STUDIO_VERSION = -property:VisualStudioVersion=17
 WIN_MSBUILD_EXE = $(_WMSBE_1)$(_WMSBE_2)
 WIN_MSBUILD_EXE_B = "$(_WMSBE_1B)$(_WMSBE_2B)"
+WIN_POWERSHELL_EXE_B = /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe
 WINPRJ = $(WINDOWS_PROJECT)
 WINPLT = $(WINDOWS_PLATFORM)
 WINCFG = $(WINDOWS_CONFIGURATION)
 WINCFGLC = $(shell echo $(WINDOWS_CONFIGURATION) | tr A-Z a-z)
 
-# When using CLion, our cmake dir is root. Expose .clang-format there too.
+# Our cmake dir acts as a secondary project root for some IDEs/tools.
+# Expose .clang-format there too so clangd picks it up for files whose
+# paths resolve through ballisticakit-cmake.
 ballisticakit-cmake/.clang-format: .clang-format
 	@mkdir -p ballisticakit-cmake
 	@cd ballisticakit-cmake && ln -sf ../.clang-format .

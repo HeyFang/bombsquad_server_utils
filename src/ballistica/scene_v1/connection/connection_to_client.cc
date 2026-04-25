@@ -206,6 +206,13 @@ void ConnectionToClient::HandleGamePacket(const std::vector<uint8_t>& data) {
                     "Ignoring invalid scenepackage-handshake-response");
         return;
       }
+      g_core->logging->Log(
+          LogName::kBaNetworking, LogLevel::kDebug, [this, &data] {
+            return "ConnectionToClient(id=" + std::to_string(id())
+                   + "): received HANDSHAKE_RESPONSE ("
+                   + std::to_string(data.size()) + " bytes, our protocol "
+                   + std::to_string(protocol_version()) + ").";
+          });
 
       // In newer builds we expect to be sent a json dict here; pull
       // client's spec from that.
@@ -304,14 +311,17 @@ void ConnectionToClient::HandleGamePacket(const std::vector<uint8_t>& data) {
           PythonRef account_id_ref;
           PythonRef account_tag_ref;
           PythonRef profiles_ref;
+          PythonRef classic_purchases_ref;
           if (result.ValueIsSequence()) {
             auto vals{result.ValueAsSequence()};
-            if (vals.size() == 3 && vals[0].ValueIsString()
-                && vals[1].ValueIsString() && PyDict_Check(*vals[2])) {
+            if (vals.size() == 4 && vals[0].ValueIsString()
+                && vals[1].ValueIsString() && PyDict_Check(*vals[2])
+                && (vals[3].ValueIsNone() || PyList_Check(*vals[3]))) {
               valid_format = true;
               account_id_ref = vals[0];
               account_tag_ref = vals[1];
               profiles_ref = vals[2];
+              classic_purchases_ref = vals[3];  // list or Py_None
             }
           }
           if (!valid_format) {
@@ -328,15 +338,29 @@ void ConnectionToClient::HandleGamePacket(const std::vector<uint8_t>& data) {
           // Verified account tag should always be simple ascii with no
           // quotes or crazy stuff so we can just stuff it directly into a
           // json str.
+          auto account_tag_str = account_tag_ref.ValueAsString();
+          assert(account_tag_str.size() < 128);
           char buffer[256];
           snprintf(buffer, sizeof(buffer),
                    "{\"n\":\"%s\",\"a\":\"V2\",\"sn\":\"\"}",
-                   account_tag_ref.ValueAsString().c_str());
+                   account_tag_str.c_str());
           set_peer_spec(PlayerSpec(buffer));
 
           // printf("TODO: SET PEER PROFILES TO %s.\n",
           //        profiles_ref.Str().c_str());
           player_profiles_ = profiles_ref;
+          // Store the classic purchases ref as-is; the accessor
+          // differentiates between "a Py_None sentinel was stored"
+          // (masters signaled unknown) and "nothing was ever stored"
+          // (non-v2-auth connection). Both cases end up as None on
+          // the Python side, which is what the lobby wants.
+          classic_purchases_ = classic_purchases_ref;
+          g_core->logging->Log(
+              LogName::kBaNetworking, LogLevel::kDebug, [this] {
+                return "ConnectionToClient(id=" + std::to_string(id())
+                       + "): v2-auth succeeded (account="
+                       + peer_public_account_id_ + ").";
+              });
         }
       }
 
@@ -610,6 +634,14 @@ void ConnectionToClient::HandleMessagePacket(
                   token_, our_handshake_player_spec_str_ + our_handshake_salt_,
                   peer_hash_, build_number_);
             }
+            g_core->logging->Log(
+                LogName::kBaNetworking, LogLevel::kDebug,
+                [this, doing_v2_auth] {
+                  return "ConnectionToClient(id=" + std::to_string(id())
+                         + "): CLIENT_INFO received (build="
+                         + std::to_string(build_number_) + ", v2_auth="
+                         + (doing_v2_auth ? "true" : "false") + ").";
+                });
           }
           cJSON_Delete(info);
         } else {
@@ -828,6 +860,13 @@ void ConnectionToClient::HandleMessagePacket(
             float val;
             memcpy(&val, &(buffer[index]), 4);
             index += 4;
+            if (type >= InputType::kLast) {
+              BA_LOG_ONCE(LogName::kBaNetworking, LogLevel::kWarning,
+                          "Ignoring player-input-commands packet with unknown "
+                          "InputType value "
+                              + std::to_string(static_cast<int>(type)));
+              break;
+            }
             client_input_device->PassInputCommand(type, val);
           }
         }
@@ -919,10 +958,9 @@ void ConnectionToClient::HandleMessagePacket(
       break;
     }
     default: {
-      // Hackers have attempted to mess with servers by sending huge
-      // amounts of data through chat messages/etc. Let's watch out for
-      // mutli-part messages growing too large and kick/ban the client if
-      // they do.
+      // Hackers have attempted to mess with servers by sending huge amounts
+      // of data through chat messages/etc. Let's watch out for multi-part
+      // messages growing too large and kick/ban the client if they do.
       if (buffer[0] == BA_MESSAGE_MULTIPART) {
         if (multipart_buffer_size() > 50000) {
           // Its not actually unknown but shhh don't tell the hackers...
@@ -1003,8 +1041,9 @@ void ConnectionToClient::HandleMasterServerClientInfo(PyObject* info_obj) {
   auto* appmode = classic::ClassicAppMode::GetActiveOrThrow();
 
   // Sanity check; should never come through here if we're doing v2 auth.
-  auto doing_v2_auth{appmode->require_client_authentication()
-                     && appmode->client_authentication_version() == 2};
+  [[maybe_unused]] auto doing_v2_auth{
+      appmode->require_client_authentication()
+      && appmode->client_authentication_version() == 2};
   assert(!doing_v2_auth);
 
   PyObject* profiles_obj = PyDict_GetItemString(info_obj, "p");

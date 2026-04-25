@@ -8,7 +8,7 @@
 
 #include "ballistica/base/python/base_python.h"
 #include "ballistica/core/core.h"
-#include "ballistica/core/platform/core_platform.h"
+#include "ballistica/core/platform/platform.h"
 #include "ballistica/shared/ballistica.h"
 #include "ballistica/shared/buildconfig/buildconfig_common.h"
 
@@ -205,6 +205,14 @@ void AppConfig::SetupEntries_() {
       StringEntry("Mac Controller Subsystem", "Classic");
   string_entries_[StringID::kDevConsoleActiveTab] =
       StringEntry("Dev Console Tab", "Python");
+  // Tri-state replacement for the legacy ``Use Insecure Connections``
+  // bool. Values: ``always`` (force ws:// + http://), ``auto`` (use
+  // secure by default, honor server-signed insecure-directive when
+  // present — matches the pre-existing default behavior), ``never``
+  // (force secure, ignore server directive). See
+  // src/assets/ba_data/python/bauiv1lib/settings/advanced.py for UI.
+  string_entries_[StringID::kInsecureConnections] =
+      StringEntry("Insecure Connections", "auto");
 
   int_entries_[IntID::kPort] = IntEntry("Port", kDefaultPort);
   int_entries_[IntID::kMaxFPS] = IntEntry("Max FPS", 60);
@@ -252,6 +260,8 @@ void AppConfig::SetupEntries_() {
       BoolEntry("Show Deprecated Login Types", false);
   bool_entries_[BoolID::kHighlightPotentialTokenPurchases] =
       BoolEntry("Highlight Potential Token Purchases", true);
+  bool_entries_[BoolID::kUseNativePythonREPL] =
+      BoolEntry("Use Native Python REPL", false);
 
   // Now add everything to our name map and make sure all is kosher.
   CompleteMap_(float_entries_);

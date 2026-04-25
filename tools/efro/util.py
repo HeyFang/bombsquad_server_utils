@@ -1,3 +1,6 @@
+# EfroSynced from ballistica-internal.
+# EFRO_SYNC_HASH=108254279322450116963957420935737493125
+#
 # Released under the MIT License. See LICENSE for details.
 #
 # pylint: disable=too-many-lines
@@ -9,6 +12,7 @@ import os
 import time
 import random
 import weakref
+import threading
 import functools
 import datetime
 from typing import TYPE_CHECKING, cast, overload
@@ -26,6 +30,11 @@ class _EmptyObj:
 # one and return it for all cases that need an empty weak-ref.
 _g_empty_weak_ref = weakref.ref(_EmptyObj())
 assert _g_empty_weak_ref() is None
+
+# State for do_once() and do_once_periodically().
+_g_do_once_counts: dict[str, int] = {}
+_g_do_once_periodically_state: dict[str, tuple[int, int]] = {}
+_g_do_once_lock = threading.Lock()
 
 # Note to self: adding a special form of partial for when we don't need
 # to pass further args/kwargs (which I think is most cases). Even though
@@ -710,6 +719,19 @@ def _compact_id(num: int, chars: str) -> str:
     return out[::-1] or '0'
 
 
+def compact_id_lower(num: int) -> str:
+    """Given a positive int, return a compact lowercase string representation.
+
+    Like compact_id() but uses only lowercase letters and digits (base-36),
+    making it safe for use in case-insensitive contexts such as DNS hostnames.
+
+    For n chars this can store values of 36^n.
+
+    Sort order for these ids is the same as the original numbers.
+    """
+    return _compact_id(num, '0123456789abcdefghijklmnopqrstuvwxyz')
+
+
 def human_readable_compact_id(num: int) -> str:
     """Given a positive int, return a compact string representation for it.
 
@@ -1053,6 +1075,29 @@ def prune_empty_dirs(prunedir: str) -> None:
                 ) from exc
 
 
+async def gather_strip(*coros: Any) -> list[Any]:
+    """asyncio.gather() with return_exceptions=True, traceback-stripped.
+
+    A common cause of reference cycles in async code is
+    asyncio.gather called with return_exceptions=True: each
+    coroutine that raised has its exception stored in the result
+    list with its full __traceback__, which keeps the originating
+    frames alive (see :func:`strip_exception_tracebacks`).
+
+    Use this anywhere you'd use ``gather(..., return_exceptions=True)``.
+    It returns the same list of results, but with exception
+    tracebacks already cleared so callers can log/inspect them
+    without creating a cycle.
+    """
+    import asyncio
+
+    results = await asyncio.gather(*coros, return_exceptions=True)
+    for r in results:
+        if isinstance(r, BaseException):
+            strip_exception_tracebacks(r)
+    return results
+
+
 def strip_exception_tracebacks(exc: BaseException) -> None:
     """Strip tracebacks from exceptions to break reference cycles.
 
@@ -1103,3 +1148,76 @@ def secure_id() -> str:
     alphabet = string.ascii_letters + string.digits  # 62 chars
 
     return ''.join(secrets.choice(alphabet) for _ in range(20))
+
+
+def do_once(on_iteration: int = 1) -> bool:
+    """Return True only when this call site is reached for the
+    ``on_iteration``-th time; False on all other calls.
+
+    Useful for one-shot side effects keyed to a specific call count.
+    The count is never reset during process lifetime.
+
+    Example: run something only the first time through::
+
+        if do_once():
+            logging.warning('First time setup.')
+
+    Example: run something only on the 5th time through::
+
+        if do_once(on_iteration=5):
+            logging.warning('Fifth occurrence.')
+    """
+    import inspect
+
+    frame = inspect.currentframe()
+    if frame is not None:
+        frame = frame.f_back
+    if frame is None:
+        return False
+    key = f'{frame.f_code.co_filename}:{frame.f_lineno}'
+    with _g_do_once_lock:
+        count = _g_do_once_counts.get(key, 0) + 1
+        _g_do_once_counts[key] = count
+    return count == on_iteration
+
+
+def do_once_periodically(
+    on_iteration: int = 1,
+    period: datetime.timedelta = datetime.timedelta(hours=1),
+) -> bool:
+    """Return True only when this call site is reached for the
+    ``on_iteration``-th time within the current time-period window.
+
+    The call count resets at the start of each new period. Period boundaries
+    are computed from ``time.monotonic()`` bucketed into fixed-width slices of
+    length ``period``, so the reset is aligned to multiples of the period from
+    the monotonic epoch (not from when the code first runs).
+
+    The ``period`` argument must be the same on every call from a given call
+    site; mixing different values produces undefined behavior.
+
+    Example: log a warning on the 5th occurrence each hour::
+
+        if do_once_periodically(on_iteration=5):
+            logging.warning('Hit 5 times this hour.')
+    """
+    import inspect
+
+    frame = inspect.currentframe()
+    if frame is not None:
+        frame = frame.f_back
+    if frame is None:
+        return False
+    key = f'{frame.f_code.co_filename}:{frame.f_lineno}'
+    period_secs = period.total_seconds()
+    now = time.monotonic()
+    slice_index = int(now / period_secs)
+    with _g_do_once_lock:
+        stored_count, stored_slice = _g_do_once_periodically_state.get(
+            key, (0, slice_index)
+        )
+        if stored_slice != slice_index:
+            stored_count = 0  # new period — reset
+        count = stored_count + 1
+        _g_do_once_periodically_state[key] = (count, slice_index)
+    return count == on_iteration

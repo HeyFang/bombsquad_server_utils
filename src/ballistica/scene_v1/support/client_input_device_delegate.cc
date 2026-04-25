@@ -75,7 +75,7 @@ auto ClientInputDeviceDelegate::GetClientID() const -> int {
   }
 }
 
-auto ClientInputDeviceDelegate::GetPublicV1AccountID() const -> std::string {
+auto ClientInputDeviceDelegate::GetAccountID() const -> std::string {
   assert(g_base->InLogicThread());
   if (connection_to_client_.exists()) {
     return connection_to_client_->peer_public_account_id();
@@ -98,6 +98,13 @@ auto ClientInputDeviceDelegate::GetAccountName(bool full) const -> std::string {
 auto ClientInputDeviceDelegate::GetPlayerProfiles() const -> PyObject* {
   if (connection_to_client_.exists()) {
     return connection_to_client_->GetPlayerProfiles();
+  }
+  return nullptr;
+}
+
+auto ClientInputDeviceDelegate::GetClassicPurchases() const -> PyObject* {
+  if (connection_to_client_.exists()) {
+    return connection_to_client_->GetClassicPurchases();
   }
   return nullptr;
 }

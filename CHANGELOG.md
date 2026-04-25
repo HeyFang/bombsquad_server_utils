@@ -1,10 +1,69 @@
-### 1.7.61 (build 22719, api 9, 2026-02-23)
+### 1.7.62 (build 22827, api 9, 2026-04-23)
+- Added initial support for signing in with a Discord account as a first-class
+  V2 login type, via Discord's Social SDK. Discord support is included in Mac,
+  Windows, and Linux test-builds for now, but will expand to Android and Mac App
+  Store builds soon. We can also start taking advantage of other features of the
+  Discord SDK such as rich presence or voice chat once any initial bugs are
+  ironed out. (Thanks Loup-Garou911XD for the proof-of-concept implementation!).
+- Regional server connections have been overhauled and now use websockets on
+  standard http/https ports. This should help reduce blocking and should
+  establish connections much faster. Please holler if you run into connectivity
+  problems as this is a significant code overhaul.
+- Added `tests/test_restapi` which can be useful as reference for the
+  ballistica.net REST api. Run `make test-restapi` to run all REST api tests
+  (you just need to supply an API Key).
+- Fixed Spaz being able to punch very shortly after executing a grab, but
+  before actually grabbing. This fixes the long standing punch grab infinite
+  exploit that allows for effortless kills on players. (Thanks TheMikirog!).
+- Added protocol 37 which allows spaz behavior_version to be set to 2 which
+  enables the above behavior. Default protocol version is still 33.
+- Spaz turbo-filter code has been moved from Spaz to PlayerSpaz and button press
+  logic has been cleaned up (Thanks vinnytherabbit!)
+- Added `BA_LOG_LEVELS` env var to override log levels at launch (e.g.
+  `BA_LOG_LEVELS='ba.net=DEBUG,ba.connectivity=DEBUG'`).
+- The engine's networking now honors the standard `HTTPS_PROXY`
+  environment variable, so the game works behind corporate /
+  sandboxed proxies without manual configuration.
+- Added `test_game_run` pcommand for automated game testing.
+- Players finally have all their unlocked characters accurately available when
+  connecting to servers with v2-auth enabled.
+- Servers with v2-auth enabled can now see verified classic_purchases for
+  connected clients (without v2-auth this will show up as None).
+- Workspace uploads are no longer are limited to 10mb (applies to web UI, REST,
+  and bacloud). Note that syncing workspaces to the client currently does not
+  support workspaces with such large files (that will mainly be for assets).
+- Added scale transition option for widget and wired up doc-ui to use that
+  instead of in-left transitions.
+- Very early logs should now be displayed consistently and with accurate timing
+  info (good for debugging bootstrapping/lifecycle issues).
+- The 'Use insecure connections' checkbox is now an always/auto/never popup with
+  'auto' being the default. In auto mode the app may opt to use insecure
+  connections in environments that are known to muck with or block secure ones.
+  Choose always or never if you don't want to give it that choice.
+  
+
+### 1.7.61 (build 22772, api 9, 2026-03-16)
+- Lucky the Leprechaun, just in time for ol' St. Patty's day (Thanks SoK!)
+- OS-Font-Rendering now works on Windows, so all languages and emoji should
+  render properly (Thanks Claude!).
+- OS-Font-Rendering now works on Linux (or other Posix-y platforms like Mac
+  homebrew) when Cairo/Pango is detected, so all languages and emoji should
+  render properly there too (Thanks Claude!).
+- Windows builds now use ANGLE (Almost Native Graphics Layer Engine) instead of
+  relying directly on OpenGL. ANGLE is an implementation of OpenGL ES that runs
+  on top of Direct3D, which gives us much better support across hardware on
+  Windows than we had before.
 - Added scenev1 protocol 36, which enables V2 auth for servers. This allows
   servers to receive authenticated V2 account info for all players before they
   are allowed to join and fixes the spoofing vulnerabilities that V1 auth had.
   V2 account ids look like 'a-XXX' whereas old V1 looked like 'pb-XXXX'. The
   default protocol is still 33, but if you are running a server it is highly
   recommended to set your protocol to 36 in your server config to enable this.
+- Added `bascenev1.SessionPlayer.get_account_id()`, which supersedes the old
+  `get_v1_account_id()`. The new method returns a V1 account id for players
+  connected via protocol < 36 and a V2 account id for protocol >= 36.
+  `get_v1_account_id()` is now deprecated and will be removed when api 9
+  support ends.
 - Wired up an http request on the V1 master server you can use to get V2 account
   ids given a V1 account id. You can use this to migrate old account databases
   for V2 auth. https://legacy.ballistica.net/v2id/YOURV1IDHERE
@@ -13,13 +72,53 @@
   reduces disconnects due to momentary network issues. Holler if this feels like
   too long. Old values were 5 and 10 seconds respectively.
 - Improved efficiency of various low level logging calls in the C++ layer
-  (thanks std::string_view!).
+  (Thanks std::string_view!).
 - Fixed an issue where clicks could sometimes be lost in the nearby-parties
   browser.
 - Fixed party window sub-menus staying after closing the root window.
   (Thanks temp!)
 - Add `bascenev1.get_client_ping` which returns the current ping (RTT in ms)
   for a connected client.
+- Simplified the Python build process for Android (see
+  `efrotools.python_build_android`). For now we're still compiling to a static
+  library which has some technical advantages for our use-case over the
+  officially-supported many-shared-libraries route. The old build path is still
+  in place (labeled '_old') but I'll remove it soon.
+- Android Python has been bumped to the latest bug fix release (3.13.12).
+- Fixed an issue where the sqlite3 module was not available in Android Python.
+- Windows builds will create a .dmp file in the executable directory on crashes,
+  which can be useful to send to me to diagnose crash bugs.
+- Starting to add some tests of low level C++ stuff (the Object class in this
+  case) to make sure it stays in good working order. Do `make test-ex` to see
+  that stuff.
+- Server with v2-auth enabled now provide verified account-ids of all clients
+  in the client-info-lists they send out.
+- Added GL debug logging. This can hopefully give us clues if we're doing
+  something that doesn't play nicely with certain graphics hardware. To enable
+  this, flip logging levels for `ba.gfx` to 'info' or 'debug' in the dev
+  console.
+- The client now connects to basn (regional) nodes using proper dns names with
+  standard public TLS. No more passing around self-signed-certificates and other
+  weirdness that is more likely to be blocked at the network level.
+- Volume slider values now properly match user expectations. This means 50%
+  volume is half as loud as 100%, and lower volumes can now be fine tuned better
+  (Thanks TheMikirog!).
+- Added support for `datetime.date` values to dataclassio (serialized as
+  YYYY-MM-DD strings).
+- (build 22759) ANGLE GL rendering on Windows is now properly loading compressed
+  textures; previously was using fallback half-res cpu-based decompression which
+  is slow and ugly (Thanks SoK for the heads-up).
+- You can now use `ba*.app.accounts.primary.request_transient_api_key()` to get
+  a temporary api-key for the signed-in account that you can use to call REST
+  functions/etc.
+- Added experimental support for Python's native REPL which gives us cool
+  features like autocompletion, command history, multiline statements and line
+  editing(going left/right). This is currently disabled by default but can be
+  enabled via the `Use Native Python REPL` config key. (Thanks Loup-Garou911XD!)
+- Network connectivity improvements: devices with no UDP connectivity should be
+  able to establish connectivity to the master-server (though udp is still
+  required for gameplay). Also, establishing connectivity on first launch should
+  be substantially faster.
 
 ### 1.7.60 (build 22709, api 9, 2026-02-11)
 - Fixed a longstanding issue causing impact, roll, and skid sounds to not
@@ -409,8 +508,6 @@
   garbage collection due to reference loops, and it offers some tips and
   functionality to help track down and eliminate said loops. Check out the
   `GarbageCollectionSubsystem` documentation for more info.
-- Added `DiscordSubsystem` class which wraps the underlying `_babase` 
-  implementation of discord sdk
 - Added proper support for mouse-cancel events. This fixes an annoying issue
   where using home-bar nav gestures on Android to switch apps could lead to
   unintended button presses (namely on chest slots since that is near the home

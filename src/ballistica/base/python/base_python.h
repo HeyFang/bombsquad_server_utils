@@ -23,6 +23,14 @@ class BasePython {
   void OnAppUnsuspend();
   void OnAppShutdown();
   void OnAppShutdownComplete();
+  /// Arm a Python faulthandler traceback dump that will fire if
+  /// shutdown wedges. Returns the number of seconds the caller should
+  /// use for its suicide timer (which includes dump runway on
+  /// platforms where the dump was armed).
+  auto ShutdownFaultHandlerArm() -> double;
+  /// Cancel the shutdown faulthandler dump. Safe to call even if it
+  /// was never armed or failed to arm.
+  void ShutdownFaultHandlerDisarm();
   void ApplyAppConfig();
   void OnScreenSizeChange();
   void StepDisplayTime();
@@ -82,6 +90,8 @@ class BasePython {
     kAppOnNativeUnsuspendCall,
     kAppOnNativeShutdownCall,
     kAppOnNativeShutdownCompleteCall,
+    kAppShutdownFaultHandlerArmCall,
+    kAppShutdownFaultHandlerDisarmCall,
     kQuitCall,
     kShowPostPurchaseMessageCall,
     kContextError,
@@ -103,6 +113,8 @@ class BasePython {
     kHaveAccountV2CredentialsCall,
     kImplicitSignInCall,
     kImplicitSignOutCall,
+    kDiscordAuthReceivedCall,
+    kDiscordSignInTokenResponseCall,
     kLoginAdapterGetSignInTokenResponseCall,
     kPreEnv,
     kOpenURLWithWebBrowserModuleCall,
@@ -127,6 +139,7 @@ class BasePython {
     kAppVariant,
     kV2AuthRequestCall,
     kV2AuthDataCall,
+    kStartNativeReplCall,
     kLast  // Sentinel; must be at end.
   };
 

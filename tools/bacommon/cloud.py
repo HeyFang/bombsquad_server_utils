@@ -201,6 +201,13 @@ class WorkspaceFetchResponse(Response):
 
     done: Annotated[bool, IOAttrs('d')] = False
 
+    #: If set, the client should treat the sync as failed and display
+    #: this message. Allows the server to communicate user-facing errors
+    #: without relying on the protocol's ``forward_clean_errors`` flag.
+    error: Annotated[
+        str | None, IOAttrs('e', soft_default=None, store_default=False)
+    ] = None
+
 
 @ioprepped
 @dataclass
@@ -306,29 +313,6 @@ class StoreQueryResponse(Response):
 
     available_purchases: Annotated[list[Purchase], IOAttrs('p')]
     token_info_url: Annotated[str, IOAttrs('tiu')]
-
-
-@ioprepped
-@dataclass
-class SecureDataCheckMessage(Message):
-    """Was this data signed by the master-server?."""
-
-    data: Annotated[bytes, IOAttrs('d')]
-    signature: Annotated[bytes, IOAttrs('s')]
-
-    @override
-    @classmethod
-    def get_response_types(cls) -> list[type[Response] | None]:
-        return [SecureDataCheckResponse]
-
-
-@ioprepped
-@dataclass
-class SecureDataCheckResponse(Response):
-    """Here's the result of that data check, boss."""
-
-    # Whether the data signature was valid.
-    result: Annotated[bool, IOAttrs('v')]
 
 
 @ioprepped
@@ -484,3 +468,29 @@ class AuthRequestResponse(Response):
 
     error: Annotated[str | None, IOAttrs('e')]
     token: Annotated[str | None, IOAttrs('t')]
+
+
+@ioprepped
+@dataclass
+class TransientAPIKeyRequest(Message):
+    """Request a transient API key for the currently signed-in account."""
+
+    @override
+    @classmethod
+    def get_response_types(cls) -> list[type[Response] | None]:
+        return [TransientAPIKeyResponse]
+
+
+@ioprepped
+@dataclass
+class TransientAPIKeyResponse(Response):
+    """Response to a transient API key request."""
+
+    class Error(Enum):
+        """Failure modes."""
+
+        INTERNAL_ERROR = 'ie'
+        KEY_LIMIT_REACHED = 'klr'
+
+    key: Annotated[str | None, IOAttrs('k')]
+    error: Annotated[Error | None, IOAttrs('e')]

@@ -294,15 +294,6 @@ class CloudSubsystem(babase.AppSubsystem):
     @overload
     def send_message_cb(
         self,
-        msg: bacommon.cloud.SecureDataCheckMessage,
-        on_response: Callable[
-            [bacommon.cloud.SecureDataCheckResponse | Exception], None
-        ],
-    ) -> None: ...
-
-    @overload
-    def send_message_cb(
-        self,
         msg: bacommon.cloud.SecureDataCheckerRequest,
         on_response: Callable[
             [bacommon.cloud.SecureDataCheckerResponse | Exception], None
@@ -338,6 +329,16 @@ class CloudSubsystem(babase.AppSubsystem):
         msg: bacommon.cloud.AuthRequestMessage,
         on_response: Callable[
             [bacommon.cloud.AuthRequestResponse | Exception],
+            None,
+        ],
+    ) -> None: ...
+
+    @overload
+    def send_message_cb(
+        self,
+        msg: bacommon.cloud.TransientAPIKeyRequest,
+        on_response: Callable[
+            [bacommon.cloud.TransientAPIKeyResponse | Exception],
             None,
         ],
     ) -> None: ...

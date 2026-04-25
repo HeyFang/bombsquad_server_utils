@@ -117,9 +117,9 @@ def get_sphinx_settings(projroot: str) -> SphinxSettings:
 
 
 def generate_sphinx_docs() -> None:
+    # pylint: disable=too-many-statements
     """Run docs generation with sphinx."""
     # pylint: disable=too-many-locals
-    # pylint: disable=too-many-statements
 
     import time
     import shutil
@@ -169,12 +169,40 @@ def generate_sphinx_docs() -> None:
     ]
     for srcdir, dstdir in dirpairs:
         os.makedirs(dstdir, exist_ok=True)
-        shutil.copytree(srcdir, dstdir, dirs_exist_ok=True)
-        # subprocess.run(['cp', '-rv', srcdir, dstdir], check=True)
+        # Exclude tools/spinoff; it's a symlink into a possibly-absent
+        # parent repo and we don't want to break if it is invalid.
+        # Use a custom callable (not ignore_patterns) so we only skip
+        # spinoff at the top level of tools/ and not tools/batools/spinoff.
+        ignore = (
+            (
+                lambda s, ns: (
+                    {'spinoff'} if os.path.normpath(s) == 'tools' else set()
+                )
+            )
+            if srcdir == 'tools/'
+            else None
+        )
+        shutil.copytree(srcdir, dstdir, dirs_exist_ok=True, ignore=ignore)
 
     # Filter all files. Doing this with multiprocessing gives us a very
     # nice speedup vs multithreading which seems gil-constrained.
     _printstatus('Filtering sources...')
+
+    # ProcessPoolExecutor's init calls os.sysconf('SC_SEM_NSEMS_MAX')
+    # to verify enough POSIX semaphores are available. Some agent
+    # sandboxes deny that syscall; when they do, stub the check out
+    # so the pool can still be constructed. Non-sandboxed runs probe
+    # successfully and are untouched. Same trick lives in
+    # efrotools.code for the parallel pylint path.
+    try:
+        os.sysconf('SC_SEM_NSEMS_MAX')
+    except PermissionError:
+        import concurrent.futures.process as _cfp
+
+        # pylint: disable=protected-access
+        _cfp._check_system_limits = lambda: None
+        # pylint: enable=protected-access
+
     futures: list[Future] = []
     with ProcessPoolExecutor(max_workers=cpu_count()) as executor:
         for root, _dirs, files in os.walk(filtered_data_dir):

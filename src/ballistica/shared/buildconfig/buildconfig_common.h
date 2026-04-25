@@ -48,7 +48,9 @@ namespace ballistica {
 #error BA_VARIANT is not defined
 #endif
 
-// Do we enable Discord support
+// Do we enable Discord Social SDK support. Off by default; opt in at
+// build-configure time via the DISCORD CMake option, which defines this
+// to 1 via target_compile_definitions.
 #ifndef BA_ENABLE_DISCORD
 #define BA_ENABLE_DISCORD 0
 #endif
@@ -184,6 +186,14 @@ namespace ballistica {
 #define BA_MINSDL_BUILD 0
 #endif
 
+// Is the opt-in automation control channel compiled in? See
+// ``src/ballistica/base/automation/`` and ``babase._automation``.
+// Unstable/unsupported dev tool; off by default. Enable in CMake via
+// -DENABLE_AUTOMATION=ON (POSIX-only).
+#ifndef BA_ENABLE_AUTOMATION
+#define BA_ENABLE_AUTOMATION 0
+#endif
+
 // Is this a debug build?
 #ifndef BA_DEBUG_BUILD
 #define BA_DEBUG_BUILD 0
@@ -310,6 +320,13 @@ class BuildConfig {
   bool platform_ios_tvos() const { return EXPBOOL_(BA_PLATFORM_IOS_TVOS); }
   bool platform_android() const { return EXPBOOL_(BA_PLATFORM_ANDROID); }
   bool platform_linux() const { return EXPBOOL_(BA_PLATFORM_LINUX); }
+
+  /// Convenience: true when running on a mobile platform (iOS / tvOS /
+  /// Android). Useful for gating features that need platform-specific
+  /// plumbing (URL schemes, permissions, etc.) we haven't done yet.
+  bool platform_mobile() const {
+    return EXPBOOL_(BA_PLATFORM_IOS || BA_PLATFORM_TVOS || BA_PLATFORM_ANDROID);
+  }
 
   const char* variant() const { return BA_VARIANT; }
 

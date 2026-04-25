@@ -25,7 +25,7 @@
 #include "ballistica/base/ui/ui.h"
 #include "ballistica/core/logging/logging.h"
 #include "ballistica/core/logging/logging_macros.h"
-#include "ballistica/core/platform/core_platform.h"
+#include "ballistica/core/platform/platform.h"
 #include "ballistica/shared/foundation/event_loop.h"
 #include "ballistica/shared/generic/json.h"
 #include "ballistica/shared/python/python.h"
@@ -1304,7 +1304,7 @@ void Assets::InitSpecialChars() {
   special_char_strings_[SpecialChar::kDiceButton2] = "\xee\x80\xA3";
   special_char_strings_[SpecialChar::kDiceButton3] = "\xee\x80\xA4";
   special_char_strings_[SpecialChar::kDiceButton4] = "\xee\x80\xA5";
-  special_char_strings_[SpecialChar::kGameCircleLogo] = "\xee\x80\xA6";
+  special_char_strings_[SpecialChar::kDiscordLogo] = "\xee\x80\xA6";
   special_char_strings_[SpecialChar::kPartyIcon] = "\xee\x80\xA7";
   special_char_strings_[SpecialChar::kTestAccount] = "\xee\x80\xA8";
   special_char_strings_[SpecialChar::kTicketBacking] = "\xee\x80\xA9";

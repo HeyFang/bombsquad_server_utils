@@ -51,6 +51,7 @@ ctx.src_omit_paths = {
     'tools/spinoff',
     '.editorconfig',
     'src/assets/workspace',
+    '.claude',
 }
 
 # Use this to 'carve out' files or directories which will be git-managed
@@ -290,6 +291,7 @@ ctx.filter_file_extensions = {
     '.xcstrings',
     '.filters',
     '.rst_t',
+    '.ps1',
 }
 
 # ELSE files with these extensions will NOT be filtered.

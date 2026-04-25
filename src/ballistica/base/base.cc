@@ -13,6 +13,9 @@
 #include "ballistica/base/assets/assets_server.h"
 #include "ballistica/base/audio/audio.h"
 #include "ballistica/base/audio/audio_server.h"
+#if BA_ENABLE_AUTOMATION
+#include "ballistica/base/automation/automation.h"
+#endif
 #include "ballistica/base/discord/discord.h"
 #include "ballistica/base/dynamics/bg/bg_dynamics_server.h"
 #include "ballistica/base/graphics/graphics.h"
@@ -35,7 +38,7 @@
 #include "ballistica/base/ui/ui_delegate.h"
 #include "ballistica/core/logging/logging.h"
 #include "ballistica/core/logging/logging_macros.h"
-#include "ballistica/core/platform/core_platform.h"
+#include "ballistica/core/platform/platform.h"
 #include "ballistica/core/python/core_python.h"
 #include "ballistica/shared/foundation/event_loop.h"
 #include "ballistica/shared/foundation/macros.h"
@@ -75,13 +78,31 @@ BaseFeatureSet::BaseFeatureSet()
       text_graphics{new TextGraphics()},
       ui{new UI()},
       utils{new Utils()},
-      discord{g_buildconfig.enable_discord() ? new Discord() : nullptr} {
+      // Only spin up Discord where we've actually done the per-platform
+      // plumbing (desktop today). The compile flag alone is not enough:
+      // the SDK itself builds on mobile, but OAuth redirects there need
+      // a registered URL scheme which we haven't wired up. Leaving the
+      // belt-and-suspenders runtime guard prevents an accidental flag
+      // flip from activating a broken code path.
+      discord(
+          (g_buildconfig.enable_discord() && !g_buildconfig.platform_mobile())
+              ? new Discord()
+              : nullptr) {
   // We're a singleton. If there's already one of us, something's wrong.
   assert(g_base == nullptr);
 
   // We modify some app behavior when run under the server manager.
   auto* envval = getenv("BA_SERVER_WRAPPER_MANAGED");
   server_wrapper_managed_ = (envval && strcmp(envval, "1") == 0);
+#if BA_ENABLE_AUTOMATION
+  // Opt-in automation FIFO. Inert unless BA_AUTOMATION_FIFO env
+  // var points at a path; tools/pcommand test_game_run sets it
+  // automatically per-silo. See base/automation/automation.h.
+  if (getenv("BA_AUTOMATION_FIFO") != nullptr
+      && getenv("BA_AUTOMATION_FIFO")[0] != '\0') {
+    automation = new Automation(getenv("BA_AUTOMATION_FIFO"));
+  }
+#endif
 }
 
 void BaseFeatureSet::OnModuleExec(PyObject* module) {
@@ -286,15 +307,14 @@ void BaseFeatureSet::SuspendApp() {
     return;
   }
 
-  millisecs_t start_time{core::CorePlatform::TimeMonotonicMillisecs()};
+  millisecs_t start_time{core::Platform::TimeMonotonicMillisecs()};
 
   // Apple mentioned 5 seconds to run stuff once backgrounded or they bring
   // down the hammer. Let's aim to stay under 4.
   millisecs_t max_duration{4000};
 
   g_core->platform->LowLevelDebugLog(
-      "SuspendApp@"
-      + std::to_string(core::CorePlatform::TimeMonotonicMillisecs()));
+      "SuspendApp@" + std::to_string(core::Platform::TimeMonotonicMillisecs()));
   app_suspended_ = true;
 
   // IMPORTANT: Any pause related stuff that event-loop-threads need to do
@@ -315,14 +335,14 @@ void BaseFeatureSet::SuspendApp() {
     if (g_base->logic->app_active_applied() == false) {
       break;
     }
-    if (std::abs(core::CorePlatform::TimeMonotonicMillisecs() - start_time)
+    if (std::abs(core::Platform::TimeMonotonicMillisecs() - start_time)
         >= max_duration_part) {
       BA_LOG_ONCE(
           LogName::kBa, LogLevel::kError,
           "SuspendApp timed out waiting for app-active callback to complete.");
       break;
     }
-    core::CorePlatform::SleepMillisecs(1);
+    core::Platform::SleepMillisecs(1);
   }
 
   EventLoop::SetEventLoopsSuspended(true);
@@ -346,13 +366,13 @@ void BaseFeatureSet::SuspendApp() {
         g_core->logging->Log(
             LogName::kBa, LogLevel::kDebug,
             "SuspendApp() completed in "
-                + std::to_string(core::CorePlatform::TimeMonotonicMillisecs()
+                + std::to_string(core::Platform::TimeMonotonicMillisecs()
                                  - start_time)
                 + "ms.");
       }
       return;
     }
-  } while (std::abs(core::CorePlatform::TimeMonotonicMillisecs() - start_time)
+  } while (std::abs(core::Platform::TimeMonotonicMillisecs() - start_time)
            < max_duration);
 
   // If we made it here, we timed out. Complain.
@@ -360,8 +380,7 @@ void BaseFeatureSet::SuspendApp() {
       std::string("SuspendApp() took too long; ")
       + std::to_string(running_loops.size())
       + " event-loops not yet suspended after "
-      + std::to_string(core::CorePlatform::TimeMonotonicMillisecs()
-                       - start_time)
+      + std::to_string(core::Platform::TimeMonotonicMillisecs() - start_time)
       + " ms: (";
   bool first = true;
   for (auto* loop : running_loops) {
@@ -419,10 +438,10 @@ void BaseFeatureSet::UnsuspendApp() {
         "AppAdapter::UnsuspendApp() called with app not in suspendedstate.");
     return;
   }
-  millisecs_t start_time{core::CorePlatform::TimeMonotonicMillisecs()};
+  millisecs_t start_time{core::Platform::TimeMonotonicMillisecs()};
   g_core->platform->LowLevelDebugLog(
       "UnsuspendApp@"
-      + std::to_string(core::CorePlatform::TimeMonotonicMillisecs()));
+      + std::to_string(core::Platform::TimeMonotonicMillisecs()));
   app_suspended_ = false;
 
   // Spin all event-loops back up.
@@ -436,7 +455,7 @@ void BaseFeatureSet::UnsuspendApp() {
     g_core->logging->Log(
         LogName::kBa, LogLevel::kDebug,
         "UnsuspendApp() completed in "
-            + std::to_string(core::CorePlatform::TimeMonotonicMillisecs()
+            + std::to_string(core::Platform::TimeMonotonicMillisecs()
                              - start_time)
             + "ms.");
   }
@@ -459,14 +478,9 @@ void BaseFeatureSet::OnAppShutdownComplete() {
 
 void BaseFeatureSet::LogStartupMessage_() {
   char buffer[256];
-  if (g_buildconfig.headless_build()) {
-    snprintf(buffer, sizeof(buffer),
-             "BallisticaKit Headless %s build %d starting...", kEngineVersion,
-             kEngineBuildNumber);
-  } else {
-    snprintf(buffer, sizeof(buffer), "BallisticaKit %s build %d starting...",
-             kEngineVersion, kEngineBuildNumber);
-  }
+  const char* headless_tag = g_buildconfig.headless_build() ? " Headless" : "";
+  snprintf(buffer, sizeof(buffer), "BallisticaKit%s %s build %d starting...",
+           headless_tag, kEngineVersion, kEngineBuildNumber);
   g_core->logging->Log(LogName::kBaApp, LogLevel::kInfo, buffer);
 }
 
@@ -608,7 +622,7 @@ auto BaseFeatureSet::GlobalAppInstanceUUID() -> std::optional<std::string> {
 
   // If we have a value but it is expired, clear it.
   if (global_app_instance_uuid_.has_value()
-      && core::CorePlatform::TimeSinceEpochSeconds()
+      && core::Platform::TimeSinceEpochSeconds()
              > global_app_instance_uuid_expire_time_) {
     global_app_instance_uuid_.reset();
     global_app_instance_uuid_expire_time_ = 0.0;
@@ -1006,7 +1020,7 @@ void BaseFeatureSet::SetAppActive(bool active) {
 
   g_core->platform->LowLevelDebugLog(
       "SetAppActive(" + std::to_string(active) + ")@"
-      + std::to_string(core::CorePlatform::TimeMonotonicMillisecs()));
+      + std::to_string(core::Platform::TimeMonotonicMillisecs()));
 
   // Issue a gentle warning if they are feeding us the same state twice in a
   // row; might imply faulty logic on an app-adapter or whatnot.
@@ -1033,7 +1047,7 @@ void BaseFeatureSet::Reset() {
 auto BaseFeatureSet::TimeSinceEpochCloudSeconds() -> seconds_t {
   // TODO(ericf): wire this up. Just using local time for now. And make sure
   // that this and utc_now_cloud() in the Python layer are synced up.
-  return core::CorePlatform::TimeSinceEpochSeconds();
+  return core::Platform::TimeSinceEpochSeconds();
 }
 
 void BaseFeatureSet::SetUIScale(UIScale scale) {

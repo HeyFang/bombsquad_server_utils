@@ -18,7 +18,7 @@
 #include "ballistica/base/python/base_python.h"
 #include "ballistica/base/ui/dev_console.h"
 #include "ballistica/base/ui/ui.h"
-#include "ballistica/core/platform/core_platform.h"
+#include "ballistica/core/platform/platform.h"
 #include "ballistica/shared/foundation/event_loop.h"
 #include "ballistica/shared/generic/utils.h"
 
@@ -1413,6 +1413,37 @@ void Input::HandleMouseUp_(int button, const Vector2f& position) {
   ApplyMouseUpCancelToCamera(button);
 
   g_base->ui->HandleMouseUp(button, cursor_pos_x_, cursor_pos_y_);
+}
+
+void Input::PushMouseClickAtVirtualCoords(int button, float virtual_x,
+                                          float virtual_y) {
+  // Schedule the dispatch on the logic thread (where UI lives).
+  g_base->logic->event_loop()->PushCall([this, button, virtual_x, virtual_y] {
+    assert(g_base->InLogicThread());
+
+    // Set cursor pos and dispatch through the same UI entry point
+    // real mouse events use, so modals / hit-testing / focus
+    // chains all behave normally.
+    cursor_pos_x_ = virtual_x;
+    cursor_pos_y_ = virtual_y;
+    millisecs_t click_time = g_core->AppTimeMillisecs();
+    bool double_click = (click_time - last_click_time_ <= double_click_time_);
+    last_click_time_ = click_time;
+    g_base->ui->HandleMouseDown(button, cursor_pos_x_, cursor_pos_y_,
+                                double_click);
+    g_base->ui->HandleMouseUp(button, cursor_pos_x_, cursor_pos_y_);
+  });
+}
+
+void Input::PushMouseScrollAtVirtualCoords(float virtual_x, float virtual_y,
+                                           float amount_x, float amount_y) {
+  g_base->logic->event_loop()->PushCall(
+      [this, virtual_x, virtual_y, amount_x, amount_y] {
+        assert(g_base->InLogicThread());
+        cursor_pos_x_ = virtual_x;
+        cursor_pos_y_ = virtual_y;
+        HandleMouseScroll_(Vector2f(amount_x, amount_y));
+      });
 }
 
 void Input::HandleMouseCancel_(int button, const Vector2f& position) {

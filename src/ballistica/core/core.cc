@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "ballistica/core/logging/logging.h"
-#include "ballistica/core/platform/core_platform.h"
+#include "ballistica/core/platform/platform.h"
 #include "ballistica/core/python/core_python.h"
 #include "ballistica/shared/foundation/macros.h"
 #include "ballistica/shared/generic/runnable.h"
@@ -58,8 +58,9 @@ auto CoreFeatureSet::Import(const CoreConfig* config) -> CoreFeatureSet* {
         // between monolithic and modular.
         std::vector<std::string> argbuffer;
         std::vector<char*> argv = CorePython::FetchPythonArgs(&argbuffer);
-        DoImport_(CoreConfig::ForArgsAndEnvVars(static_cast<int>(argv.size()),
-                                                argv.data()));
+        DoImport_(CoreConfig::ForArgsAndEnvVars(
+            static_cast<int>(argv.size()), argv.data(),
+            Platform::TimeSinceEpochSeconds()));
       } else {
         // Not using Python sys args but we still want to process env vars.
         DoImport_(CoreConfig::ForEnvVars());
@@ -82,10 +83,10 @@ void CoreFeatureSet::DoImport_(const CoreConfig& config) {
 CoreFeatureSet::CoreFeatureSet(CoreConfig config)
     : main_thread_id_{std::this_thread::get_id()},
       python{new CorePython()},
-      platform{CorePlatform::Create()},
+      platform{Platform::Create()},
       core_config_{std::move(config)},
       logging{new Logging()},
-      last_app_time_measure_microsecs_{CorePlatform::TimeMonotonicMicrosecs()},
+      last_app_time_measure_microsecs_{Platform::TimeMonotonicMicrosecs()},
       vr_mode_{config.vr_mode} {
   // We're a singleton. If there's already one of us, something's wrong.
   assert(g_core == nullptr);
@@ -315,7 +316,7 @@ auto CoreFeatureSet::HeadlessMode() -> bool {
 }
 
 static void WaitThenDie(millisecs_t wait, const std::string& action) {
-  CorePlatform::SleepMillisecs(wait);
+  Platform::SleepMillisecs(wait);
   FatalError("Timed out waiting for " + action + ".");
 }
 
@@ -335,7 +336,7 @@ auto CoreFeatureSet::AppTimeSeconds() -> seconds_t {
 }
 
 void CoreFeatureSet::UpdateAppTime_() {
-  microsecs_t t = CorePlatform::TimeMonotonicMicrosecs();
+  microsecs_t t = Platform::TimeMonotonicMicrosecs();
 
   // If we're at a different time than our last query, do our funky math.
   if (t != last_app_time_measure_microsecs_) {

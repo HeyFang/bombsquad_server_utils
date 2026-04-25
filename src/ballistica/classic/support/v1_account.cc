@@ -10,7 +10,7 @@
 #include "ballistica/base/logic/logic.h"
 #include "ballistica/base/support/plus_soft.h"
 #include "ballistica/core/core.h"
-#include "ballistica/core/platform/core_platform.h"
+#include "ballistica/core/platform/platform.h"
 #include "ballistica/shared/foundation/event_loop.h"
 #include "ballistica/shared/generic/utils.h"
 
@@ -83,8 +83,6 @@ auto V1Account::AccountTypeToIconString(V1AccountType type) -> std::string {
       return g_base->assets->CharStr(SpecialChar::kOculusLogo);
     case V1AccountType::kGameCenter:
       return g_base->assets->CharStr(SpecialChar::kGameCenterLogo);
-    case V1AccountType::kGameCircle:
-      return g_base->assets->CharStr(SpecialChar::kGameCircleLogo);
     case V1AccountType::kDevice:
     case V1AccountType::kServer:
       return g_base->assets->CharStr(SpecialChar::kLocalAccount);

@@ -368,7 +368,6 @@ class SpinoffContext:
     def run(self) -> None:
         """Do the thing."""
         # pylint: disable=too-many-branches
-        # pylint: disable=too-many-statements
 
         self._read_state()
 
@@ -864,6 +863,12 @@ class SpinoffContext:
                     endindex = index
                     while end_tag not in lines[endindex]:
                         endindex += 1
+                        if endindex >= len(lines):
+                            raise RuntimeError(
+                                f"spinoff strip-tag '{begin_tag}' on line"
+                                f' {index + 1} has no matching'
+                                f" '{end_tag}'."
+                            )
 
                     # If the line after us is blank,
                     # include it too to keep spacing clean.
@@ -1676,7 +1681,6 @@ class SpinoffContext:
         print_individual_updates: bool,
         is_project_file: bool = False,
     ) -> None:
-        # pylint: disable=too-many-locals
         src_entity = self._src_entities[src_path]
         dst_path = src_entity.dst
         src_path_full = os.path.join(self._src_root, src_path)
@@ -1764,7 +1768,6 @@ class SpinoffContext:
         is_project_file: bool,
     ) -> DstEntity:
         # pylint: disable=too-many-positional-arguments
-        # pylint: disable=too-many-locals
 
         # If this is a project file, we already fed the filtered
         # src into our ProjectUpdater instance, so all we do here is
@@ -2049,8 +2052,6 @@ class SpinoffContext:
     ) -> None:
         # pylint: disable=too-many-positional-arguments
         # pylint: disable=too-many-branches
-        # pylint: disable=too-many-statements
-        # pylint: disable=too-many-locals
 
         # Ok, *something* differs from our cache. Need to take a closer look.
 

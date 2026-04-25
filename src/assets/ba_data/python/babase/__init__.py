@@ -43,6 +43,7 @@ from _babase import (
     clipboard_set_text,
     ContextCall,
     ContextRef,
+    crash,
     displaytime,
     displaytimer,
     DisplayTimer,
@@ -149,7 +150,6 @@ from babase._devconsole import (
     DevConsoleTab,
     DevConsoleTabEntry,
 )
-from babase._discord import DiscordSubsystem
 from babase._emptyappmode import EmptyAppMode
 from babase._error import (
     ActivityNotFoundError,
@@ -194,7 +194,7 @@ from babase._logging import (
     netlog,
     uilog,
 )
-from babase._login import LoginAdapter, LoginInfo
+from babase._login import LoginAdapter, LoginInfo, discord_sign_in
 from babase._mgen.enums import (
     InputType,
     Permission,
@@ -264,16 +264,17 @@ __all__ = [
     'ContextCall',
     'ContextError',
     'ContextRef',
+    'crash',
     'DelegateNotFoundError',
     'DevConsoleButtonDef',
     'DevConsoleTab',
     'DevConsoleTabEntry',
     'DevConsoleSubsystem',
-    'DiscordSubsystem',
     'DisplayTime',
     'displaytime',
     'displaytimer',
     'DisplayTimer',
+    'discord_sign_in',
     'do_once',
     'EmptyAppMode',
     'env',

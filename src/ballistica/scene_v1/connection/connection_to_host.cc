@@ -8,12 +8,12 @@
 #include <string>
 #include <vector>
 
+#include "ballistica/base/app_platform/app_platform.h"
 #include "ballistica/base/assets/assets.h"
 #include "ballistica/base/audio/audio.h"
 #include "ballistica/base/input/device/input_device.h"
 #include "ballistica/base/input/input.h"
 #include "ballistica/base/networking/networking.h"
-#include "ballistica/base/platform/base_platform.h"
 #include "ballistica/base/python/base_python.h"
 #include "ballistica/base/support/plus_soft.h"
 #include "ballistica/classic/support/classic_app_mode.h"
@@ -155,6 +155,11 @@ void ConnectionToHost::HandleGamePacket(const std::vector<uint8_t>& data) {
       uint16_t their_protocol_version;
       memcpy(&their_protocol_version, data.data() + 1,
              sizeof(their_protocol_version));
+      g_core->logging->Log(
+          LogName::kBaNetworking, LogLevel::kDebug, [their_protocol_version] {
+            return "ConnectionToHost: received HANDSHAKE (host protocol "
+                   + std::to_string(their_protocol_version) + ").";
+          });
       if (their_protocol_version >= kProtocolVersionClientMin
           && their_protocol_version <= kProtocolVersionMax) {
         compatible = true;
@@ -185,6 +190,14 @@ void ConnectionToHost::HandleGamePacket(const std::vector<uint8_t>& data) {
           }
         }
         got_v2_auth_usage_ = true;
+        g_core->logging->Log(LogName::kBaNetworking, LogLevel::kDebug, [this] {
+          return v2_auth_global_app_instance_id_.has_value()
+                     ? ("ConnectionToHost: host uses v2-auth "
+                        "(global-app-instance="
+                        + *v2_auth_global_app_instance_id_ + ").")
+                     : std::string(
+                           "ConnectionToHost: host does not use v2-auth.");
+        });
       }
 
       std::optional<std::string> v2_auth_token;
@@ -335,6 +348,12 @@ void ConnectionToHost::HandleGamePacket(const std::vector<uint8_t>& data) {
         peer_hash_ = g_base->Plus()->CalcV1PeerHash(peer_hash_input_);
 
         set_can_communicate(true);
+        g_core->logging->Log(LogName::kBaNetworking, LogLevel::kDebug, [this] {
+          return "ConnectionToHost: can_communicate=true "
+                 "(protocol="
+                 + std::to_string(protocol_version_)
+                 + ", peer_spec=" + peer_spec().GetDisplayString() + ").";
+        });
         appmode->LaunchClientSession();
 
         // NOTE:
@@ -715,6 +734,18 @@ void ConnectionToHost::HandleMessagePacket(const std::vector<uint8_t>& buffer) {
     }
 
     default: {
+      // Disabling this check for now - looks like there are legit multipart
+      // messages of that size coming through.
+      //
+      // if (buffer[0] == BA_MESSAGE_MULTIPART
+      //     && multipart_buffer_size() > 50000) {
+      //   g_core->logging->Log(
+      //       LogName::kBaNetworking, LogLevel::kError,
+      //       "Multipart message from host exceeded size limit;
+      //       disconnecting.");
+      //   Error("");
+      //   return;
+      // }
       Connection::HandleMessagePacket(buffer);
     }
   }
