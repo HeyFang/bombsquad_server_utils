@@ -89,7 +89,7 @@ class Info(ServerCommand):
                 target = self.get_session_player(_id)
 
                 try:
-                    acc_id = target.get_v1_account_id()
+                    acc_id = target.get_account_id()
                     short_name = target.inputdevice.get_v1_account_name(
                         full=False
                     )

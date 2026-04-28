@@ -177,9 +177,9 @@ class StatsLoggerPlugin(ba.Plugin):
                 print("[StatsLogger] ERROR reading Stats:", e)
 
             try:
-                acc_id = sp.get_v1_account_id()  # REAL ACCOUNT ID
+                acc_id = sp.get_account_id()  # REAL ACCOUNT ID
                 dev = sp.inputdevice
-                short_name = dev.get_v1_account_name(full=False)
+                short_name = dev.get_account_name(full=False)
             except Exception:
                 acc_id = None
                 short_name = ""
