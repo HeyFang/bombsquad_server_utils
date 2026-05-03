@@ -24,6 +24,7 @@
 #include "ballistica/shared/foundation/macros.h"
 #include "ballistica/shared/generic/native_stack_trace.h"
 #include "ballistica/shared/generic/utils.h"
+#include "ballistica/shared/python/python.h"
 #include "external/monocypher/monocypher-ed25519.h"
 
 namespace ballistica::base {
@@ -400,6 +401,61 @@ static PyMethodDef PyRequestPermissionDef = {
     METH_VARARGS | METH_KEYWORDS,      // flags
 
     "request_permission(permission: babase.Permission) -> None\n"
+    "\n"
+    ":meta private:",
+};
+
+// ------------------- add_network_availability_callback -----------------------
+
+static auto PyAddNetworkAvailabilityCallback(PyObject* self, PyObject* args,
+                                             PyObject* keywds) -> PyObject* {
+  BA_PYTHON_TRY;
+  // No logic-thread precondition: registration just stores a
+  // Python callable and forwards it to the platform layer. The
+  // platform-layer callback fires on whatever thread, and the
+  // wrapping lambda acquires the GIL itself. So registration is
+  // safe from any Python-running thread.
+  PyObject* call_obj;
+  static const char* kwlist[] = {"call", nullptr};
+  if (!PyArg_ParseTupleAndKeywords(args, keywds, "O",
+                                   const_cast<char**>(kwlist), &call_obj)) {
+    return nullptr;
+  }
+  if (!PyCallable_Check(call_obj)) {
+    PyErr_SetString(PyExc_TypeError, "'call' must be callable.");
+    return nullptr;
+  }
+  // Underlying contract has no deregistration; the callable lives
+  // for the app's lifetime, so we just retain a reference and never
+  // release it.
+  Py_INCREF(call_obj);
+  g_core->platform->AddNetworkAvailabilityCallback([call_obj](bool available) {
+    // Callback may fire on any thread; acquire the GIL before
+    // touching Python.
+    Python::ScopedInterpreterLock gil;
+    PyObject* py_args = Py_BuildValue("(O)", available ? Py_True : Py_False);
+    PyObject* result = PyObject_Call(call_obj, py_args, nullptr);
+    Py_DECREF(py_args);
+    if (result == nullptr) {
+      // Don't propagate; print and clear so subsequent
+      // invocations still fire.
+      PyErr_Print();
+      PyErr_Clear();
+    } else {
+      Py_DECREF(result);
+    }
+  });
+  Py_RETURN_NONE;
+  BA_PYTHON_CATCH;
+}
+
+static PyMethodDef PyAddNetworkAvailabilityCallbackDef = {
+    "add_network_availability_callback",            // name
+    (PyCFunction)PyAddNetworkAvailabilityCallback,  // method
+    METH_VARARGS | METH_KEYWORDS,                   // flags
+
+    "add_network_availability_callback(call: Callable[[bool], None])"
+    " -> None\n"
     "\n"
     ":meta private:",
 };
@@ -2269,6 +2325,7 @@ auto PythonMoethodsBase3::GetMethods() -> std::vector<PyMethodDef> {
       PyInMainMenuDef,
       PyRequestPermissionDef,
       PyHavePermissionDef,
+      PyAddNetworkAvailabilityCallbackDef,
       PyUnlockAllInputDef,
       PyLockAllInputDef,
       PySetUpSigIntDef,

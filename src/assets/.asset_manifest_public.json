@@ -357,5 +357,6 @@
  "ba_data/python/efro/terminal.py",
  "ba_data/python/efro/threadpool.py",
  "ba_data/python/efro/util.py",
+ "ba_data/python/efro/venvpatch.py",
  "server_package/ballisticakit_server.py"
 ]

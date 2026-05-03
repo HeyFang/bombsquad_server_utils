@@ -528,7 +528,8 @@ SCRIPT_TARGETS_PY_PUBLIC_TOOLS = \
   $(BUILD_DIR)/ba_data/python/efro/rpcws.py \
   $(BUILD_DIR)/ba_data/python/efro/terminal.py \
   $(BUILD_DIR)/ba_data/python/efro/threadpool.py \
-  $(BUILD_DIR)/ba_data/python/efro/util.py
+  $(BUILD_DIR)/ba_data/python/efro/util.py \
+  $(BUILD_DIR)/ba_data/python/efro/venvpatch.py
 
 SCRIPT_TARGETS_SO_PUBLIC_TOOLS = \
   

@@ -6,7 +6,9 @@
 #include <sys/stat.h>
 
 #include <cstdio>
+#include <functional>
 #include <list>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
@@ -311,6 +313,46 @@ class Platform {
   virtual auto GetBroadcastAddrs() -> std::vector<uint32_t>;
   virtual auto SetSocketNonBlocking(int sd) -> bool;
 
+  /// Callback type for receiving network path availability state.
+  using NetworkAvailabilityCallback = std::function<void(bool available)>;
+
+  /// Register a callback to receive OS-reported network path
+  /// availability. The callback is invoked once with the current
+  /// value (which may happen synchronously inside this call), then
+  /// again whenever the value changes.
+  ///
+  /// The callback may fire on ANY thread — the OS-provided dispatch
+  /// queue, a worker thread, or the registration thread itself.
+  /// Callers are responsible for marshaling to whatever thread they
+  /// need, and for any synchronization on state they touch.
+  ///
+  /// 'false' is a strict "definitely offline" signal — the OS sees
+  /// no usable network path (airplane mode, wifi off with no
+  /// cellular, ethernet unplugged); callers should short-circuit
+  /// network attempts. 'true' is "maybe online" — captive portals,
+  /// ISP outages, and DNS issues still report 'true', so existing
+  /// reachability probes are still required.
+  ///
+  /// On platforms without a native implementation, fires once with
+  /// 'true' and never again, preserving today's "always try"
+  /// behavior. As a testing aid, setting environment variable
+  /// BA_NETWORK_AVAILABILITY_DEBUG_TOGGLE=1 makes registrations
+  /// start in the 'unavailable' state and toggle every 5 seconds
+  /// (in place of any real platform monitoring). This lets
+  /// consumers be exercised through both states — and observed
+  /// honoring the gate during the initial 5-second unavailable
+  /// window — without actually severing the network connection.
+  ///
+  /// There is no deregistration; callbacks are expected to live for
+  /// the app's lifetime.
+  ///
+  /// Non-virtual: this method manages the callback list, change
+  /// dedup, and DEBUG-level logging on transitions. Platform
+  /// subclasses hook in by overriding
+  /// DoStartNetworkAvailabilityMonitoring() and reporting state
+  /// changes via SetNetworkAvailability().
+  void AddNetworkAvailabilityCallback(NetworkAvailabilityCallback cb);
+
 #pragma mark ERRORS & DEBUGGING ------------------------------------------------
 
   /// Should return a subclass of NativeStackTrace allocated via new. It is
@@ -477,10 +519,29 @@ class Platform {
 
   virtual void HandleLowLevelDebugLog(const std::string& msg);
 
+  /// Called once on the first network-availability registration for
+  /// the platform to subscribe to OS-level monitoring (NWPathMonitor,
+  /// ConnectivityManager, INetworkListManager, NetworkManager via
+  /// D-Bus, etc.) and feed state back through SetNetworkAvailability().
+  /// The default implementation is a no-op (value stays at the
+  /// initial 'true'). Not invoked when the
+  /// BA_NETWORK_AVAILABILITY_DEBUG_TOGGLE env var is set; the debug
+  /// toggle thread runs in place of OS monitoring.
+  virtual void DoStartNetworkAvailabilityMonitoring();
+
+  /// Called by subclasses (and the debug toggler) to report the
+  /// current network availability state. Thread-safe; callable from
+  /// any thread. Logs at DEBUG and dispatches to all registered
+  /// callbacks if (and only if) the value differs from the last
+  /// reported value.
+  void SetNetworkAvailability(bool available);
+
   Platform();
   virtual ~Platform();
 
  private:
+  void RunNetworkAvailabilityDebugToggle_();
+
   bool is_stdin_a_terminal_{};
   bool have_has_touchscreen_value_{};
   bool have_touchscreen_{};
@@ -497,6 +558,11 @@ class Platform {
 
   // Temp; should be able to remove this once Swift 5.10 is out.
   std::list<std::string> mac_music_app_playlists_;
+
+  std::mutex network_availability_mutex_;
+  std::vector<NetworkAvailabilityCallback> network_availability_callbacks_;
+  bool network_availability_monitoring_started_{};
+  bool network_availability_value_{true};
 };
 
 }  // namespace ballistica::core

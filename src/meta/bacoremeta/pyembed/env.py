@@ -78,6 +78,12 @@ def emit_held_log(logger: object, level: int, msg: str, created: float) -> None:
 
     assert isinstance(logger, logging.Logger)
 
+    # Re-gate held logs against current per-logger levels: the C++ gate
+    # ran pre-baenv.configure() with uninitialized levels and let
+    # everything through, and Logger.handle() below bypasses isEnabledFor.
+    if not logger.isEnabledFor(level):
+        return
+
     record = logger.makeRecord(logger.name, level, '(held)', 0, msg, (), None)
     record.created = created
     whole = int(created)

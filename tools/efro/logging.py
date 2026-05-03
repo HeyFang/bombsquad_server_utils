@@ -696,6 +696,23 @@ class FileLogEcho:
         """Are we a terminal?"""
         return self._original.isatty()
 
+    def fileno(self) -> int:
+        """Return the underlying file descriptor.
+
+        Pass-through to the wrapped file. Callers that need a raw fd
+        — most notably :mod:`faulthandler` (``dump_traceback`` and
+        friends require an integer fd or an object with
+        ``fileno()``) — get the original stderr/stdout fd here. The
+        log-echo wrapping is intentionally bypassed in that path:
+        faulthandler writes during shutdown / stuck-loop diagnostics
+        when acquiring locks may be unsafe, so going straight to the
+        fd is the correct behavior. In hosted-server / basn
+        environments where the raw fd is captured into the task
+        output stream, the dump still ends up where operators can
+        find it.
+        """
+        return self._original.fileno()
+
 
 def setup_logging(
     log_path: str | Path | None,

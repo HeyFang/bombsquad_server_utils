@@ -34,7 +34,7 @@ TIMEOUT_SECONDS = 60 * 5
 VERBOSE = os.environ.get('BACLOUD_VERBOSE') == '1'
 
 # Server we talk to (can override via env var).
-BACLOUD_SERVER = os.getenv('BACLOUD_SERVER', 'ballistica.net')
+BACLOUD_SERVER = os.getenv('BACLOUD_SERVER', 'regional.ballistica.net')
 
 
 def _hash_file(path: str) -> tuple[int, str]:

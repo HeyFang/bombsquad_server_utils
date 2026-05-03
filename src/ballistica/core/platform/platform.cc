@@ -5,7 +5,10 @@
 #include <chrono>
 #include <cstdio>
 #include <list>
+#include <mutex>
 #include <string>
+#include <thread>
+#include <utility>
 #include <vector>
 
 #include "ballistica/shared/foundation/macros.h"
@@ -985,6 +988,88 @@ auto Platform::SetSocketNonBlocking(int sd) -> bool {
   }
   return true;
 #endif
+}
+
+void Platform::AddNetworkAvailabilityCallback(NetworkAvailabilityCallback cb) {
+  bool initial_value;
+  bool need_start;
+  {
+    std::lock_guard lock(network_availability_mutex_);
+    // On the very first registration, seed the cached value to
+    // 'false' if we're in debug-toggle mode. Consumers thus see an
+    // unambiguous 'offline' window at startup before the toggle
+    // thread flips to 'true' shortly after — exercising the gate
+    // before anything has a chance to fully connect.
+    if (!network_availability_monitoring_started_) {
+      auto debug_var = GetEnv("BA_NETWORK_AVAILABILITY_DEBUG_TOGGLE");
+      if (debug_var && *debug_var == "1") {
+        network_availability_value_ = false;
+      }
+    }
+    initial_value = network_availability_value_;
+    network_availability_callbacks_.push_back(cb);
+    need_start = !network_availability_monitoring_started_;
+    network_availability_monitoring_started_ = true;
+  }
+  cb(initial_value);
+  if (need_start) {
+    // Optional debug override: BA_NETWORK_AVAILABILITY_DEBUG_TOGGLE=1
+    // bypasses real platform monitoring and runs a thread that
+    // starts in the 'unavailable' state and toggles every 5
+    // seconds, so consumers can be exercised without actually
+    // severing the network connection.
+    auto debug_var = GetEnv("BA_NETWORK_AVAILABILITY_DEBUG_TOGGLE");
+    if (debug_var && *debug_var == "1") {
+      // Detached and never joined; runs until process exit. There's
+      // a tiny shutdown-race window where the thread could fire
+      // SetNetworkAvailability while g_core or its members are
+      // mid-destruction. Acceptable here since this is debug-only
+      // (env-var-gated) and the 5s sleep makes the race vanishingly
+      // unlikely. If we ever want to close it, switch to a joinable
+      // member thread with an atomic stop flag + condvar wait.
+      std::thread(&Platform::RunNetworkAvailabilityDebugToggle_, this).detach();
+    } else {
+      DoStartNetworkAvailabilityMonitoring();
+    }
+  }
+}
+
+void Platform::SetNetworkAvailability(bool available) {
+  std::vector<NetworkAvailabilityCallback> snapshot;
+  {
+    std::lock_guard lock(network_availability_mutex_);
+    if (available == network_availability_value_) {
+      return;  // dedup; no change.
+    }
+    network_availability_value_ = available;
+    snapshot = network_availability_callbacks_;
+  }
+  g_core->logging->Log(LogName::kBaNetworking, LogLevel::kDebug, [available] {
+    return std::string("Network availability changed: ")
+           + (available ? "true" : "false");
+  });
+  for (auto& cb : snapshot) {
+    cb(available);
+  }
+}
+
+void Platform::DoStartNetworkAvailabilityMonitoring() {
+  // Default: no monitoring; value stays 'true'. Platform subclasses
+  // override to subscribe to OS-level availability monitoring.
+}
+
+void Platform::RunNetworkAvailabilityDebugToggle_() {
+  // The initial 'false' was seeded in AddNetworkAvailabilityCallback;
+  // we wait one period before the first flip to 'true' so consumers
+  // can be observed honoring the gate during the initial unavailable
+  // window before anything has a chance to come up. Same period is
+  // used for all subsequent toggles.
+  bool current = false;
+  while (true) {
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+    current = !current;
+    SetNetworkAvailability(current);
+  }
 }
 
 auto Platform::TimeSinceLaunchMillisecs() const -> millisecs_t {

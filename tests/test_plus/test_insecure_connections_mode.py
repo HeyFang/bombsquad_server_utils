@@ -16,11 +16,14 @@ never    yes         ``wss://`` (config overrides directive)
 =======  ==========  =========================
 
 Every cell is covered by a live end-to-end run. The test pre-seeds
-``Insecure Connections`` into a fresh silo's ``config.json``, launches
-the headless client with the relevant loggers turned up, and greps
-the combined stdout/stderr for the first ``Trying WS connection to
-ws[s]://`` line — that is the scheme v2transport actually picked via
-``ConnectivityManager.effective_use_insecure()``.
+``Insecure Connections`` into a fresh silo's ``config.json``, runs
+the headless binary directly via ``apprun.run_headless_capture`` with
+the relevant loggers turned up, and greps the combined stdout/stderr
+for the first ``Trying WS connection to ws[s]://`` line — that is
+the scheme v2transport actually picked via
+``ConnectivityManager.effective_use_insecure()``. The helper is
+configured to SIGTERM the binary on the first matching line, so each
+cell typically completes in well under a second.
 
 The directive-present cells additionally set
 ``BA_DEBUG_SERVERNODEQUERY_INSECURE_DIRECTIVE=force``. That env var
@@ -42,7 +45,6 @@ import json
 import os
 import re
 import shutil
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -54,21 +56,11 @@ FAST_MODE = os.environ.get('BA_TEST_FAST_MODE') == '1'
 # Project root (two levels up from this test file).
 _PROJROOT = Path(__file__).resolve().parents[2]
 
-# test_game_run hard-timeout; comfortably past boot + initial
-# transport connect (~0.5s).
-_TEST_GAME_RUN_TIMEOUT_SECONDS = 10
-
-# Outer subprocess timeout — needs headroom for binary-build on
-# a fresh checkout.
-_SUBPROCESS_TIMEOUT_SECONDS = 180
-
-# Give the transport enough time to complete its first connect
-# attempt and log the scheme; the directive-present rows also need
-# time for the /servernodequery response to arrive and be verified.
-_EXEC_QUICK_QUIT = '''
-import _babase
-_babase.apptimer(5.0, _babase.quit)
-'''
+# Hard timeout per run. The helper kills the binary on first WS-line
+# match, so happy-path runtime is sub-second; this is the safety net
+# if the line never appears (e.g. transient TLS-handshake stall
+# reaching prod, like the one that hit bombsquad.smoke #1468).
+_HEADLESS_TIMEOUT_SECONDS = 20
 
 _WS_ATTEMPT_RE = re.compile(r'Trying WS connection to (wss?)://', re.MULTILINE)
 _DIRECTIVE_VERIFIED_RE = re.compile(
@@ -91,15 +83,16 @@ def _run_vanilla_with_config(
 
     Removes the per-instance silo so each invocation starts clean,
     writes just ``config.json`` with ``Insecure Connections`` set to
-    ``mode``, invokes ``test_game_run`` with a quick-quit ``--exec``
-    and ``--log ba.v2transport=INFO,ba.connectivity=INFO`` (both loggers
-    are below the default threshold; we need v2transport to see the
+    ``mode``, then invokes :func:`apprun.run_headless_capture` with
+    ``ba.v2transport=INFO,ba.connectivity=INFO`` (both loggers are
+    below the default threshold; we need v2transport to see the
     ``Trying WS connection`` line and connectivity to see the
-    directive-verification line). When ``with_directive`` is set, we
-    also export ``BA_DEBUG_SERVERNODEQUERY_INSECURE_DIRECTIVE=force``
+    directive-verification line). When ``with_directive`` is set,
+    ``BA_DEBUG_SERVERNODEQUERY_INSECURE_DIRECTIVE=force`` is exported
     so the client's ``/servernodequery`` fetch asks the master server
-    to attach a signed directive on the response. Returns combined
-    stdout/stderr.
+    to attach a signed directive on the response. The helper kills
+    the binary on the first WS-line match, so each cell typically
+    finishes in well under a second. Returns combined stdout/stderr.
     """
     silo = _silo_dir(instance)
     shutil.rmtree(silo, ignore_errors=True)
@@ -109,31 +102,18 @@ def _run_vanilla_with_config(
         json.dumps({'Insecure Connections': mode}, indent=2)
     )
 
-    apprun.acquire_binary(purpose=f'insecure-mode {instance}')
-
-    env = os.environ.copy()
+    env: dict[str, str] = {
+        'BA_LOG_LEVELS': 'ba.v2transport=INFO,ba.connectivity=INFO',
+    }
     if with_directive:
         env['BA_DEBUG_SERVERNODEQUERY_INSECURE_DIRECTIVE'] = 'force'
 
-    proc = subprocess.run(
-        [
-            'tools/pcommand',
-            'test_game_run',
-            '--instance',
-            instance,
-            '--timeout',
-            str(_TEST_GAME_RUN_TIMEOUT_SECONDS),
-            '--log',
-            'ba.v2transport=INFO,ba.connectivity=INFO',
-            '--exec',
-            _EXEC_QUICK_QUIT,
-        ],
-        cwd=_PROJROOT,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        timeout=_SUBPROCESS_TIMEOUT_SECONDS,
+    proc = apprun.run_headless_capture(
+        purpose=f'insecure-mode {instance}',
+        config_dir=str(ba_root),
         env=env,
-        check=False,
+        timeout=_HEADLESS_TIMEOUT_SECONDS,
+        stop_pattern=_WS_ATTEMPT_RE,
     )
     return proc.stdout.decode(errors='replace')
 

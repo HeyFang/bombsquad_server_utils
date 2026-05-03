@@ -252,16 +252,20 @@ def printcolors() -> None:
 
 def python_version_android_base() -> None:
     """Print built Python base version."""
-    from efrotools.pybuild import PY_VER_ANDROID
+    # Source of truth is the new in-tree build script. Legacy
+    # PY_VER_ANDROID in efrotools.pybuild is for the old pipeline
+    # (build_android / patch flow) and is not what active builds
+    # consume.
+    from efrotools.python_build_android import PY_VER
 
-    print(PY_VER_ANDROID, end='')
+    print(PY_VER, end='')
 
 
 def python_version_android() -> None:
     """Print Android embedded Python version."""
-    from efrotools.pybuild import PY_VER_EXACT_ANDROID
+    from efrotools.python_build_android import PY_VER_EXACT
 
-    print(PY_VER_EXACT_ANDROID, end='')
+    print(PY_VER_EXACT, end='')
 
 
 def python_build_android_old() -> None:
