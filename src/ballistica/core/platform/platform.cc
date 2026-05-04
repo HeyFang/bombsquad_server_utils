@@ -995,23 +995,20 @@ void Platform::AddNetworkAvailabilityCallback(NetworkAvailabilityCallback cb) {
   bool need_start;
   {
     std::lock_guard lock(network_availability_mutex_);
-    // On the very first registration, seed the cached value to
-    // 'false' if we're in debug-toggle mode. Consumers thus see an
-    // unambiguous 'offline' window at startup before the toggle
-    // thread flips to 'true' shortly after — exercising the gate
-    // before anything has a chance to fully connect.
-    if (!network_availability_monitoring_started_) {
-      auto debug_var = GetEnv("BA_NETWORK_AVAILABILITY_DEBUG_TOGGLE");
-      if (debug_var && *debug_var == "1") {
-        network_availability_value_ = false;
-      }
-    }
     initial_value = network_availability_value_;
     network_availability_callbacks_.push_back(cb);
     need_start = !network_availability_monitoring_started_;
     network_availability_monitoring_started_ = true;
   }
-  cb(initial_value);
+  // API contract: consumers assume 'unavailable' until informed
+  // otherwise. So fire a synchronous callback only when we have
+  // non-default state to convey ('true'). This keeps the first
+  // registration silent (no redundant cb(false) before the real
+  // OS report arrives) while still informing late registrations
+  // of the current state if the OS has already said 'true'.
+  if (initial_value) {
+    cb(initial_value);
+  }
   if (need_start) {
     // Optional debug override: BA_NETWORK_AVAILABILITY_DEBUG_TOGGLE=1
     // bypasses real platform monitoring and runs a thread that
@@ -1054,16 +1051,20 @@ void Platform::SetNetworkAvailability(bool available) {
 }
 
 void Platform::DoStartNetworkAvailabilityMonitoring() {
-  // Default: no monitoring; value stays 'true'. Platform subclasses
-  // override to subscribe to OS-level availability monitoring.
+  // Default (no real OS monitoring): immediately report 'true' so
+  // platforms without a per-OS implementation aren't stuck in the
+  // initial 'false' state forever. Subclasses override to subscribe
+  // to OS-level monitoring and report actual state via
+  // SetNetworkAvailability.
+  SetNetworkAvailability(true);
 }
 
 void Platform::RunNetworkAvailabilityDebugToggle_() {
-  // The initial 'false' was seeded in AddNetworkAvailabilityCallback;
-  // we wait one period before the first flip to 'true' so consumers
-  // can be observed honoring the gate during the initial unavailable
-  // window before anything has a chance to come up. Same period is
-  // used for all subsequent toggles.
+  // We wait one period before the first flip to 'true' so
+  // consumers can be observed honoring the gate during the initial
+  // unavailable window before anything has a chance to come up.
+  // Same period is used for all subsequent toggles. Initial 'false'
+  // is the platform-wide default; no explicit seed needed here.
   bool current = false;
   while (true) {
     std::this_thread::sleep_for(std::chrono::seconds(5));

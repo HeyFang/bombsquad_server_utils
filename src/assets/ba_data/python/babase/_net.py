@@ -47,11 +47,14 @@ class NetworkSubsystem:
         self.transport_state = ''
         self.server_time_offset_hours: float | None = None
 
-        # OS-reported network path availability. Updated by a callback
-        # that may fire on any thread; the GIL makes the bare bool
-        # write/read safe. Optimistic 'True' default is replaced
-        # synchronously by the registration call below.
-        self._available: bool = True
+        # OS-reported network path availability. Updated by a
+        # callback that may fire on any thread; the GIL makes the
+        # bare bool write/read safe. Defaults to False per the
+        # platform API contract: "assume unavailable until informed
+        # otherwise". The registration below installs the callback;
+        # platforms with no native implementation flip us to True
+        # promptly via the default monitoring-start path.
+        self._available: bool = False
         _babase.add_network_availability_callback(self._on_availability_changed)
 
     def _on_availability_changed(self, available: bool) -> None:

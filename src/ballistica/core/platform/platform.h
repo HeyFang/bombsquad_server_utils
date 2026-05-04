@@ -317,9 +317,26 @@ class Platform {
   using NetworkAvailabilityCallback = std::function<void(bool available)>;
 
   /// Register a callback to receive OS-reported network path
-  /// availability. The callback is invoked once with the current
-  /// value (which may happen synchronously inside this call), then
-  /// again whenever the value changes.
+  /// availability.
+  ///
+  /// API contract: callers MUST assume the network is unavailable
+  /// until a callback fires with ``true``. The callback is invoked
+  /// only on changes from the assumed-or-cached state, so consumers
+  /// that haven't yet been told ``true`` should treat the network
+  /// as down. This avoids both a redundant initial cb(false) and
+  /// the race where startup code reads a stale "available" before
+  /// the OS has reported.
+  ///
+  /// In practice this means:
+  ///   - First registration: typically no synchronous fire. The
+  ///     callback fires once the OS reports (which happens promptly:
+  ///     synchronous on platforms with no native monitoring; usually
+  ///     within milliseconds on those that do).
+  ///   - Late registration (after the OS has already reported
+  ///     ``true``): a synchronous cb(true) fires inside this call so
+  ///     the late consumer learns current state immediately.
+  ///   - Any state change: async cb fires on whatever thread the OS
+  ///     dispatches on.
   ///
   /// The callback may fire on ANY thread — the OS-provided dispatch
   /// queue, a worker thread, or the registration thread itself.
@@ -333,15 +350,14 @@ class Platform {
   /// ISP outages, and DNS issues still report 'true', so existing
   /// reachability probes are still required.
   ///
-  /// On platforms without a native implementation, fires once with
-  /// 'true' and never again, preserving today's "always try"
-  /// behavior. As a testing aid, setting environment variable
-  /// BA_NETWORK_AVAILABILITY_DEBUG_TOGGLE=1 makes registrations
-  /// start in the 'unavailable' state and toggle every 5 seconds
-  /// (in place of any real platform monitoring). This lets
-  /// consumers be exercised through both states — and observed
-  /// honoring the gate during the initial 5-second unavailable
-  /// window — without actually severing the network connection.
+  /// On platforms without a native implementation, the default
+  /// DoStartNetworkAvailabilityMonitoring() reports ``true`` once
+  /// and never again, preserving today's "always try" behavior. As
+  /// a testing aid, setting environment variable
+  /// BA_NETWORK_AVAILABILITY_DEBUG_TOGGLE=1 substitutes a thread
+  /// that toggles every 5 seconds (starting offline) in place of
+  /// any real platform monitoring, so consumers can be exercised
+  /// through both states without actually severing the network.
   ///
   /// There is no deregistration; callbacks are expected to live for
   /// the app's lifetime.
@@ -562,7 +578,14 @@ class Platform {
   std::mutex network_availability_mutex_;
   std::vector<NetworkAvailabilityCallback> network_availability_callbacks_;
   bool network_availability_monitoring_started_{};
-  bool network_availability_value_{true};
+  // Defaults to false so consumers must wait for an affirmative
+  // signal (a callback firing 'true') before assuming network is
+  // up. This avoids races where code at startup reads the value
+  // before the platform's first OS report has arrived. Platforms
+  // without a real implementation get an immediate 'true' from the
+  // default DoStartNetworkAvailabilityMonitoring() so they're not
+  // stuck offline forever.
+  bool network_availability_value_{false};
 };
 
 }  // namespace ballistica::core
