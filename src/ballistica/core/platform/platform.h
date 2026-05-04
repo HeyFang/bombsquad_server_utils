@@ -369,6 +369,19 @@ class Platform {
   /// changes via SetNetworkAvailability().
   void AddNetworkAvailabilityCallback(NetworkAvailabilityCallback cb);
 
+  /// Stop dispatching network-availability changes to registered
+  /// callbacks. Idempotent. Once called, subsequent
+  /// SetNetworkAvailability() calls and synchronous fires from
+  /// AddNetworkAvailabilityCallback() are no-ops, and OS-level
+  /// monitors that are still running on detached threads
+  /// (NWPathMonitor, NLM event sink, ConnectivityManager.NetworkCallback)
+  /// have no further effect. The OS monitors themselves are not
+  /// torn down — they live until process exit — only the dispatch
+  /// path is silenced. Intended to be called early in app shutdown,
+  /// before subscriber state (e.g. Python interpreter, logic-thread
+  /// objects) starts being torn down.
+  void StopNetworkAvailabilityDispatch();
+
 #pragma mark ERRORS & DEBUGGING ------------------------------------------------
 
   /// Should return a subclass of NativeStackTrace allocated via new. It is
@@ -586,6 +599,12 @@ class Platform {
   // default DoStartNetworkAvailabilityMonitoring() so they're not
   // stuck offline forever.
   bool network_availability_value_{false};
+  // Set by StopNetworkAvailabilityDispatch() during app shutdown.
+  // Once true, SetNetworkAvailability and the synchronous fire in
+  // AddNetworkAvailabilityCallback are no-ops. Lets us silence
+  // late OS-callback dispatches before subscriber state is torn
+  // down by the shutdown cascade.
+  bool network_availability_dispatch_stopped_{};
 };
 
 }  // namespace ballistica::core

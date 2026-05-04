@@ -993,12 +993,20 @@ auto Platform::SetSocketNonBlocking(int sd) -> bool {
 void Platform::AddNetworkAvailabilityCallback(NetworkAvailabilityCallback cb) {
   bool initial_value;
   bool need_start;
+  bool stopped;
   {
     std::lock_guard lock(network_availability_mutex_);
     initial_value = network_availability_value_;
     network_availability_callbacks_.push_back(cb);
     need_start = !network_availability_monitoring_started_;
     network_availability_monitoring_started_ = true;
+    stopped = network_availability_dispatch_stopped_;
+  }
+  if (stopped) {
+    // Shutdown has already begun; don't fire synchronously and
+    // don't kick off OS monitoring. The callback stays in the list
+    // (harmless) but will never be invoked.
+    return;
   }
   // API contract: consumers assume 'unavailable' until informed
   // otherwise. So fire a synchronous callback only when we have
@@ -1035,6 +1043,12 @@ void Platform::SetNetworkAvailability(bool available) {
   std::vector<NetworkAvailabilityCallback> snapshot;
   {
     std::lock_guard lock(network_availability_mutex_);
+    if (network_availability_dispatch_stopped_) {
+      // Shutdown in progress; silence any further dispatch. Don't
+      // even update the cached value — the API contract is "stay
+      // at last reported state on shutdown."
+      return;
+    }
     if (available == network_availability_value_) {
       return;  // dedup; no change.
     }
@@ -1057,6 +1071,11 @@ void Platform::DoStartNetworkAvailabilityMonitoring() {
   // to OS-level monitoring and report actual state via
   // SetNetworkAvailability.
   SetNetworkAvailability(true);
+}
+
+void Platform::StopNetworkAvailabilityDispatch() {
+  std::lock_guard lock(network_availability_mutex_);
+  network_availability_dispatch_stopped_ = true;
 }
 
 void Platform::RunNetworkAvailabilityDebugToggle_() {

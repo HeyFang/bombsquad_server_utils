@@ -511,6 +511,27 @@ void PlatformApple::BlockingFatalErrorDialog(const std::string& message) {
 #endif
 }
 
+void PlatformApple::OnNetAvailChanged(bool available) {
+  if (auto* p = dynamic_cast<PlatformApple*>(g_core->platform)) {
+    p->SetNetworkAvailability(available);
+  }
+}
+
+void PlatformApple::DoStartNetworkAvailabilityMonitoring() {
+#if BA_XCODE_BUILD
+  // Asks Swift to start an ``NWPathMonitor`` that fires
+  // ``OnNetAvailChanged`` from its pathUpdateHandler on a
+  // background queue. Idempotent on the Swift side; the monitor
+  // lives until process exit (no deregistration in our API).
+  BallisticaKit::FromCpp::startNetAvailabilityMonitoring();
+#else
+  // Non-Xcode (e.g. cmake server) build on macOS: no Swift bridge
+  // available. Fall back to the default behavior of immediately
+  // reporting 'true' so consumers aren't stuck offline.
+  Platform::DoStartNetworkAvailabilityMonitoring();
+#endif
+}
+
 }  // namespace ballistica::core
 
 #endif  // BA_PLATFORM_MACOS || BA_PLATFORM_IOS_TVOS
