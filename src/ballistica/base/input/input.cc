@@ -1197,7 +1197,7 @@ void Input::HandleMouseScroll_(const Vector2f& amount) {
   Camera* camera = g_base->graphics->camera();
   if (camera) {
     if (camera->manual()) {
-      camera->ManualHandleMouseWheel(0.005f * amount.y);
+      camera->ManualHandleMouseWheel(0.5f * amount.y);
     }
   }
 }

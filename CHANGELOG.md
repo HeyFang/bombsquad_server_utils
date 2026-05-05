@@ -1,3 +1,6 @@
+### 1.7.63 (build 22839, api 9, 2026-05-05)
+- Fixed mouse-wheel zooming in manual camera mode
+
 ### 1.7.62 (build 22837, api 9, 2026-05-04)
 - Added initial support for signing in with a Discord account as a first-class
   V2 login type, via Discord's Social SDK. Discord support is included in Mac,
