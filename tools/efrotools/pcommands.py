@@ -827,8 +827,9 @@ def showtime() -> None:
 def apply_venv_patches() -> None:
     """Apply patches listed in ``config/venv_patches.json`` to the venv.
 
-    Run this after ``pip install`` on freshly-built venvs. Each
-    patch is a literal-string find-and-replace against a file in
+    Run this after package install on freshly-built venvs (``uv pip
+    install`` in current Makefile flows; historically ``pip install``).
+    Each patch is a literal-string find-and-replace against a file in
     site-packages. See :mod:`efro.venvpatch` for the schema.
 
     Args (positional, all optional):

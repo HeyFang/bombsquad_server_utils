@@ -1409,27 +1409,39 @@ VENV_PYTHON ?= python3.13
 
 # Increment this to force all downstream venvs to fully rebuild. Useful after
 # removing requirements since upgrading venvs in place will never uninstall
-# stuff.
-VENV_STATE = 3
+# stuff, and after switching the venv's installer (e.g. pip → uv).
+VENV_STATE = 4
 
 # Update our virtual environment whenever reqs changes, Python version
 # changes, our venv's Python symlink breaks (can happen for minor Python
 # updates), or explicit state number changes. This is a dependency of env so
 # should not itself depend on env.
+#
+# Uses uv (https://docs.astral.sh/uv/) as the venv builder + package
+# installer; ~10x faster than stock pip on cold installs and gives us a
+# single-resolver story across the fleet. uv does not install pip into
+# the venv by default — anything that needs to install packages should
+# go through ``uv pip install`` rather than ``.venv/bin/pip``.
 .venv/.efro_venv_complete: \
       config/requirements.txt \
       tools/efrotools/pyver.py \
       .venv/bin/$(VENV_PYTHON) \
       .venv/.efro_venv_state_$(VENV_STATE)
+# Hard-require uv up front with a friendly install pointer; failing here
+# is much clearer than failing inside a recipe several lines down.
+	@command -v uv >/dev/null \
+ || (echo 'uv not found on PATH.' \
+ && echo 'Install via your package manager (brew install uv) or' \
+ && echo 'run: curl -LsSf https://astral.sh/uv/install.sh | sh' \
+ && exit 1)
 # Update venv in place when possible; otherwise create from scratch.
 	@[ -f .venv/bin/$(VENV_PYTHON) ] \
  && [ -f .venv/.efro_venv_state_$(VENV_STATE) ] \
  && echo Updating existing $(VENV_PYTHON) virtual environment in \'.venv\'... \
  || (echo Creating new $(VENV_PYTHON) virtual environment in \'.venv\'... \
- && rm -rf .venv && $(VENV_PYTHON) -m venv .venv \
+ && rm -rf .venv && uv venv --python $(VENV_PYTHON) .venv \
  && touch .venv/.efro_venv_state_$(VENV_STATE))
-	.venv/bin/pip install --upgrade pip
-	.venv/bin/pip install -r config/requirements.txt
+	uv pip install --python .venv/bin/$(VENV_PYTHON) -r config/requirements.txt
 	@touch .venv/.efro_venv_complete # Done last to signal fully-built venv.
 	@echo Project virtual environment for $(VENV_PYTHON) at .venv is ready to use.
 
