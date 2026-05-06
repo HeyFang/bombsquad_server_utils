@@ -18,8 +18,16 @@ runs:
       uses: actions/setup-python@v6
       with:
         python-version: "3.13"
-        cache: "pip"
-        cache-dependency-path: config/requirements.txt
+    # ``make env`` builds the project venv via uv (uv venv +
+    # uv pip install ...), so uv must be on PATH before that runs.
+    # ``setup-uv`` is the official Astral-published action; it
+    # installs uv and uses requirements.txt-keyed caching the same
+    # way ``setup-python``'s ``cache: pip`` did before this switch.
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v6
+      with:
+        enable-cache: true
+        cache-dependency-glob: "config/requirements.txt"
     - name: Cache Bombsquad assets
       id: cache-assets
       uses: actions/cache@v5
