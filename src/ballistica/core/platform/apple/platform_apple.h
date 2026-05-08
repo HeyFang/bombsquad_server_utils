@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "ballistica/core/core.h"
 #include "ballistica/core/platform/platform.h"
 
 namespace ballistica::core {
@@ -63,8 +64,16 @@ class PlatformApple : public Platform {
   auto CanShowBlockingFatalErrorDialog() -> bool override;
   void BlockingFatalErrorDialog(const std::string& message) override;
 
+  /// Bridge entry point: Swift's NWPathMonitor pathUpdateHandler
+  /// translates path-status changes into calls to this static
+  /// helper, which forwards to the base
+  /// ``Platform::SetNetworkAvailability`` for dedup, dispatch, and
+  /// logging. Runs on whatever queue the monitor was started on.
+  static void OnNetAvailChanged(bool available);
+
  protected:
   auto DoGetDataDirectoryMonolithicDefault() -> std::string override;
+  void DoStartNetworkAvailabilityMonitoring() override;
 
  private:
   std::optional<std::string> ba_locale_;

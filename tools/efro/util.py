@@ -808,11 +808,26 @@ def unchanging_hostname() -> str:
     import platform
     import subprocess
 
-    # On Mac, this should give the computer name assigned in System Prefs.
+    # On Mac, read the user-set ComputerName directly out of the
+    # SystemConfiguration plist via plutil. This is the same
+    # source-of-truth that ``scutil --get ComputerName`` reads through
+    # configd, but plutil hits the file directly so it's also
+    # resilient to sandbox restrictions on configd access (Claude
+    # Code's sandbox blocks scutil's SCDynamicStore queries, causing
+    # them to return the generic factory default "MacBook Pro").
     if platform.system() == 'Darwin':
         return (
             subprocess.run(
-                ['scutil', '--get', 'ComputerName'],
+                [
+                    'plutil',
+                    '-extract',
+                    'System.System.ComputerName',
+                    'raw',
+                    '-o',
+                    '-',
+                    '/Library/Preferences/SystemConfiguration/'
+                    'preferences.plist',
+                ],
                 check=True,
                 capture_output=True,
             )
@@ -1111,8 +1126,33 @@ def strip_exception_tracebacks(exc: BaseException) -> None:
 
     This call strips tracebacks from the provided exception, any
     exceptions that were active when it was raised, and any it was
-    explicitly raised from, recursively. Be sure you are done using the
-    exception before calling this.
+    explicitly raised from, recursively.
+
+    Important: ONLY call this when you are fully done with the
+    exception — typically at the tail end of an ``except`` block,
+    after any logging, reporting, or chaining via ``raise X from
+    Y`` has already happened. The traceback is part of the
+    exception's user-visible diagnostic surface; consumers
+    (including subsequent ``except`` blocks up the stack, log
+    handlers, and code that calls ``traceback.format_exception``)
+    expect it to be intact while the exception is in flight.
+
+    DO NOT call this in places that:
+
+    * Store the exception somewhere a future caller will read it
+      (e.g. attaching it to a response object, queueing it, etc.).
+    * Hand the exception off to a callback or another thread.
+    * Re-raise it (with or without ``from``) after the call —
+      the new exception's ``__cause__``/``__context__`` chain
+      would point at a now-tracebackless exception, so the
+      caller catching the new exception sees a degraded
+      diagnostic.
+
+    The right pattern is "consume, then strip": let the
+    exception flow normally through producers, dispatchers, and
+    chaining points; only call this where you've finished
+    extracting whatever info you need (logging, error-reporting,
+    etc.) and are about to drop the reference.
     """
     seen = set()
     stack = [exc]

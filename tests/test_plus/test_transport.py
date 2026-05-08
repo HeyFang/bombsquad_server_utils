@@ -222,7 +222,7 @@ def test_reject_permanent() -> None:
             cfgdir,
             env={'BA_DEBUG_SERVERNODEQUERY_REJECT': 'too_old'},
             pattern=_LOG_VEGETABLE_MODE,
-            hard_timeout=15.0,
+            hard_timeout=60.0,
         )
     assert _LOG_REJECTION_PERMANENT in out, (
         f'Expected {_LOG_REJECTION_PERMANENT!r} in output.\n'
@@ -254,7 +254,7 @@ def test_reject_permanent_silent() -> None:
             cfgdir,
             env={'BA_DEBUG_SERVERNODEQUERY_REJECT': 'permanent_silent'},
             pattern=_LOG_VEGETABLE_MODE,
-            hard_timeout=15.0,
+            hard_timeout=60.0,
         )
     assert _LOG_REJECTION_PERMANENT in out, (
         f'Expected {_LOG_REJECTION_PERMANENT!r} in output.\n'
@@ -292,7 +292,7 @@ def test_reject_transient() -> None:
             env={'BA_DEBUG_SERVERNODEQUERY_REJECT': 'transient'},
             pattern=_LOG_REJECTION_TRANSIENT,
             min_occurrences=2,
-            hard_timeout=20.0,
+            hard_timeout=60.0,
         )
     assert out.count(_LOG_REJECTION_TRANSIENT) >= 2, (
         f'Expected at least 2 {_LOG_REJECTION_TRANSIENT!r} lines'

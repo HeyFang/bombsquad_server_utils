@@ -48,6 +48,20 @@ if TYPE_CHECKING:
 #
 # ---------------------------------------------------------------------------
 
+# Both 3.13.11 and 3.14.2 have been verified on this pipeline as of
+# 2026-05-03 (all 10 slices + gather). To switch active version,
+# change all three constants together (they must agree). Per-version
+# differences in module sets etc. live in
+# ``efrotools.pybuild.patch_modules_setup`` keyed off PY_VER. The
+# BeeWare branch's Makefile pins PYTHON_VERSION exactly, and
+# ``_check_beeware_versions()`` will fail loudly on a mismatch — so
+# bumping the patch version requires matching what BeeWare currently
+# pins (or pinning BEEWARE_COMMIT to override).
+#
+# To switch to 3.14:
+#   PY_VER = '3.14'
+#   PY_VER_EXACT = '3.14.2'   # whatever BeeWare's 3.14 branch pins
+#   BEEWARE_BRANCH = '3.14'
 PY_VER = '3.13'
 PY_VER_EXACT = '3.13.11'
 BEEWARE_BRANCH = '3.13'
@@ -185,11 +199,26 @@ def _fetch(url: str, cache_dir: str, cache_name: str | None = None) -> str:
 
 
 def _extract(tarball: str, destdir: str) -> str:
-    """Extract tarball into destdir; return path to top-level extracted dir."""
+    """Extract tarball into destdir; return path to top-level extracted dir.
+
+    Filters out ``.idea/`` directories — Python's source tarball ships
+    JetBrains/PyCharm project metadata under ``Android/testbed/.idea/``
+    which Claude Code's sandbox refuses to write inside (and refuses
+    to delete from). Skipping at extract time keeps the working tree
+    free of those paths so ``rm -rf`` cleans it normally next time.
+    """
     os.makedirs(destdir, exist_ok=True)
+
+    def _filter(
+        member: tarfile.TarInfo, dest_path: str
+    ) -> tarfile.TarInfo | None:
+        if '.idea' in member.name.split('/'):
+            return None
+        return tarfile.tar_filter(member, dest_path)
+
     with tarfile.open(tarball) as tf:
         top = tf.getmembers()[0].name.split('/')[0]
-        tf.extractall(destdir, filter='tar')
+        tf.extractall(destdir, filter=_filter)
     return os.path.join(destdir, top)
 
 
@@ -419,6 +448,36 @@ def _build_env_apple(sdk: str, _triple: str, pydir: str) -> dict[str, str]:
     # symbol link failures when building for iOS/tvOS.
     env['PKG_CONFIG_LIBDIR'] = ''
     env['PKG_CONFIG_PATH'] = ''
+    # Force-off autoconf detection for libc functions that exist on
+    # the host (macOS) but aren't declared in the iOS/tvOS/xrOS SDK
+    # headers. Without this, configure's link test succeeds via the
+    # iphonesimulator wrapper's host-libc fallback, HAVE_DUP3 /
+    # HAVE_PIPE2 get defined, and posixmodule.c then fails with
+    # ``-Werror=implicit-function-declaration`` because the SDK
+    # doesn't actually declare them. The dup2 / pipe fallback paths
+    # already exist in posixmodule.c so disabling these is safe.
+    #
+    # This is the same class of issue BeeWare's Python.patch
+    # already handles for ``getentropy``, ``execv``, ``fork``,
+    # ``fork1``, ``posix_spawn``, ``posix_spawnp``,
+    # ``posix_spawn_file_actions_addclosefrom_np``, and
+    # ``sigaltstack`` — they patch ``configure`` to skip
+    # ``AC_CHECK_FUNC`` entirely on iOS/tvOS/visionOS/watchOS, with
+    # the comment "iOS defines some system methods that can be
+    # linked (so they are found by configure), but either raise a
+    # compilation error (because the header definition prevents
+    # usage - autoconf doesn't use the headers), or raise an error
+    # if used at runtime."
+    #
+    # ``dup3`` / ``pipe2`` aren't yet in BeeWare's force-off list,
+    # likely because their CI pins Xcode 16.4 and the issue only
+    # surfaces with Xcode 26+ where the iOS-26 simulator SDK
+    # exposes more libsystem symbols. We preempt it via env-var
+    # cache override here (same effect as their patch). Drop these
+    # lines once BeeWare adds the entries upstream and the next
+    # ``BEEWARE_BRANCH`` bump pulls in their version.
+    env['ac_cv_func_dup3'] = 'no'
+    env['ac_cv_func_pipe2'] = 'no'
     return env
 
 
@@ -609,7 +668,7 @@ def _patch_modules_setup(pydir: str) -> None:
     """
     from efrotools.pybuild import patch_modules_setup
 
-    patch_modules_setup(pydir, 'apple')
+    patch_modules_setup(pydir, 'apple', python_version=PY_VER)
 
 
 def _patch_configure(pydir: str) -> None:
@@ -863,8 +922,13 @@ def build(rootdir: str, slice_name: str) -> None:
     print('Checking BeeWare version constants...')
     _check_beeware_versions(cache_dir)
 
-    # Start fresh.
-    subprocess.run(['rm', '-rf', build_dir], check=True)
+    # Start fresh. ``check=False`` because Claude Code's sandbox
+    # blocks deletes inside any ``.idea/`` directory (Python's source
+    # tarball ships some under ``Android/testbed/.idea/``); leftover
+    # ``.idea/`` content from prior builds is harmless to the build
+    # itself, and ``_extract()`` filters new ``.idea/`` paths out at
+    # extract time so they don't accumulate further.
+    subprocess.run(['rm', '-rf', build_dir], check=False)
     os.makedirs(src_dir, exist_ok=True)
     os.makedirs(deps_dir, exist_ok=True)
 
@@ -972,7 +1036,21 @@ def build(rootdir: str, slice_name: str) -> None:
     # ------------------------------------------------------------------
     # 6. Build host python path.
     # ------------------------------------------------------------------
+    # configure rejects a host python whose minor version differs from
+    # the build target. sys.executable is our project venv (currently
+    # 3.13). When PY_VER is something else, look up python<PY_VER> on
+    # PATH instead — Homebrew installs land at /opt/homebrew/bin/.
     build_python = sys.executable
+    host_ver_tag = f'{sys.version_info.major}.{sys.version_info.minor}'
+    if host_ver_tag != PY_VER:
+        found = shutil.which(f'python{PY_VER}')
+        if found is None:
+            raise RuntimeError(
+                f'Need python{PY_VER} on PATH for --with-build-python'
+                f' (cross-compiling Python {PY_VER_EXACT}); '
+                f'sys.executable is python{host_ver_tag}.'
+            )
+        build_python = found
 
     # ------------------------------------------------------------------
     # 7. Configure Python.

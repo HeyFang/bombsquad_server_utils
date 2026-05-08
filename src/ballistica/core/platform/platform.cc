@@ -5,7 +5,10 @@
 #include <chrono>
 #include <cstdio>
 #include <list>
+#include <mutex>
 #include <string>
+#include <thread>
+#include <utility>
 #include <vector>
 
 #include "ballistica/shared/foundation/macros.h"
@@ -985,6 +988,108 @@ auto Platform::SetSocketNonBlocking(int sd) -> bool {
   }
   return true;
 #endif
+}
+
+void Platform::AddNetworkAvailabilityCallback(NetworkAvailabilityCallback cb) {
+  bool initial_value;
+  bool need_start;
+  bool stopped;
+  {
+    std::lock_guard lock(network_availability_mutex_);
+    initial_value = network_availability_value_;
+    network_availability_callbacks_.push_back(cb);
+    need_start = !network_availability_monitoring_started_;
+    network_availability_monitoring_started_ = true;
+    stopped = network_availability_dispatch_stopped_;
+  }
+  if (stopped) {
+    // Shutdown has already begun; don't fire synchronously and
+    // don't kick off OS monitoring. The callback stays in the list
+    // (harmless) but will never be invoked.
+    return;
+  }
+  // API contract: consumers assume 'unavailable' until informed
+  // otherwise. So fire a synchronous callback only when we have
+  // non-default state to convey ('true'). This keeps the first
+  // registration silent (no redundant cb(false) before the real
+  // OS report arrives) while still informing late registrations
+  // of the current state if the OS has already said 'true'.
+  if (initial_value) {
+    cb(initial_value);
+  }
+  if (need_start) {
+    // Optional debug override: BA_NETWORK_AVAILABILITY_DEBUG_TOGGLE=1
+    // bypasses real platform monitoring and runs a thread that
+    // starts in the 'unavailable' state and toggles every 5
+    // seconds, so consumers can be exercised without actually
+    // severing the network connection.
+    auto debug_var = GetEnv("BA_NETWORK_AVAILABILITY_DEBUG_TOGGLE");
+    if (debug_var && *debug_var == "1") {
+      // Detached and never joined; runs until process exit. There's
+      // a tiny shutdown-race window where the thread could fire
+      // SetNetworkAvailability while g_core or its members are
+      // mid-destruction. Acceptable here since this is debug-only
+      // (env-var-gated) and the 5s sleep makes the race vanishingly
+      // unlikely. If we ever want to close it, switch to a joinable
+      // member thread with an atomic stop flag + condvar wait.
+      std::thread(&Platform::RunNetworkAvailabilityDebugToggle_, this).detach();
+    } else {
+      DoStartNetworkAvailabilityMonitoring();
+    }
+  }
+}
+
+void Platform::SetNetworkAvailability(bool available) {
+  std::vector<NetworkAvailabilityCallback> snapshot;
+  {
+    std::lock_guard lock(network_availability_mutex_);
+    if (network_availability_dispatch_stopped_) {
+      // Shutdown in progress; silence any further dispatch. Don't
+      // even update the cached value — the API contract is "stay
+      // at last reported state on shutdown."
+      return;
+    }
+    if (available == network_availability_value_) {
+      return;  // dedup; no change.
+    }
+    network_availability_value_ = available;
+    snapshot = network_availability_callbacks_;
+  }
+  g_core->logging->Log(LogName::kBaNetworking, LogLevel::kDebug, [available] {
+    return std::string("Network availability changed: ")
+           + (available ? "true" : "false");
+  });
+  for (auto& cb : snapshot) {
+    cb(available);
+  }
+}
+
+void Platform::DoStartNetworkAvailabilityMonitoring() {
+  // Default (no real OS monitoring): immediately report 'true' so
+  // platforms without a per-OS implementation aren't stuck in the
+  // initial 'false' state forever. Subclasses override to subscribe
+  // to OS-level monitoring and report actual state via
+  // SetNetworkAvailability.
+  SetNetworkAvailability(true);
+}
+
+void Platform::StopNetworkAvailabilityDispatch() {
+  std::lock_guard lock(network_availability_mutex_);
+  network_availability_dispatch_stopped_ = true;
+}
+
+void Platform::RunNetworkAvailabilityDebugToggle_() {
+  // We wait one period before the first flip to 'true' so
+  // consumers can be observed honoring the gate during the initial
+  // unavailable window before anything has a chance to come up.
+  // Same period is used for all subsequent toggles. Initial 'false'
+  // is the platform-wide default; no explicit seed needed here.
+  bool current = false;
+  while (true) {
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+    current = !current;
+    SetNetworkAvailability(current);
+  }
 }
 
 auto Platform::TimeSinceLaunchMillisecs() const -> millisecs_t {

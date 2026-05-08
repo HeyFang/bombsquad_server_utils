@@ -8,9 +8,12 @@ Manages constructing or downloading it as well as running it.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-import platform
-import subprocess
 import os
+import platform
+import re
+import signal
+import subprocess
+import threading
 
 from efro.terminal import Clr
 
@@ -174,3 +177,113 @@ def acquire_binary(purpose: str, *, gui: bool = False) -> str:
             f"Binary not found at expected path '{binary_path}'."
         )
     return binary_path
+
+
+def run_headless_capture(
+    *,
+    purpose: str,
+    config_dir: str | None = None,
+    exec_code: str | None = None,
+    env: Mapping[str, str] | None = None,
+    timeout: float = 30.0,
+    udp_listener: bool = False,
+    stop_pattern: str | re.Pattern[str] | None = None,
+    sigterm_grace: float = 5.0,
+) -> subprocess.CompletedProcess[bytes]:
+    """Boot the headless engine, capture stdout+stderr, and return.
+
+    Designed for capture-style tests that boot the client, observe a
+    bit of behavior in the logs, and quit. Like ``python_command``,
+    this goes through ``acquire_binary``, so build-vs-prefab is
+    controlled by ``BA_APP_RUN_ENABLE_BUILDS=1`` (default: prefab).
+
+    By default ``BA_NO_UDP_LISTENER=1`` is exported so the binary
+    never opens a UDP socket. That sidesteps Claude Code's sandbox
+    (which blocks ``0.0.0.0`` binds) and avoids port conflicts on
+    shared CI hosts. Pass ``udp_listener=True`` if a test genuinely
+    needs the listener.
+
+    If ``stop_pattern`` (str or compiled regex) is given, output is
+    streamed and the process is sent SIGTERM as soon as a line
+    matches — much faster than waiting for an apptimer to call
+    ``_babase.quit``. Without it, the binary runs until it exits on
+    its own or ``timeout`` elapses.
+
+    Stdout and stderr are merged. Returns a CompletedProcess with
+    bytes ``stdout``; callers decode as needed. Never raises on
+    timeout — callers assert on the captured output instead.
+    """
+    binpath = os.path.abspath(acquire_binary(purpose=purpose))
+    bindir = os.path.dirname(binpath)
+
+    env_final = dict(os.environ)
+    if env is not None:
+        env_final.update(env)
+    if not udp_listener:
+        env_final.setdefault('BA_NO_UDP_LISTENER', '1')
+
+    cmd = [binpath]
+    if config_dir is not None:
+        cmd += ['--config-dir', config_dir]
+    if exec_code is not None:
+        cmd += ['--exec', exec_code]
+
+    pattern: re.Pattern[str] | None
+    if isinstance(stop_pattern, str):
+        pattern = re.compile(stop_pattern)
+    else:
+        pattern = stop_pattern
+
+    captured: list[bytes] = []
+
+    with subprocess.Popen(
+        cmd,
+        cwd=bindir,
+        env=env_final,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    ) as proc:
+        assert proc.stdout is not None
+        stream = proc.stdout
+
+        if pattern is None:
+            try:
+                out_bytes, _ = proc.communicate(timeout=timeout)
+                captured.append(out_bytes)
+            except subprocess.TimeoutExpired:
+                proc.send_signal(signal.SIGTERM)
+                try:
+                    out_bytes, _ = proc.communicate(timeout=sigterm_grace)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    out_bytes, _ = proc.communicate()
+                captured.append(out_bytes)
+        else:
+            matcher = pattern
+
+            def reader() -> None:
+                for raw in iter(stream.readline, b''):
+                    captured.append(raw)
+                    if matcher.search(raw.decode(errors='replace')):
+                        return
+
+            thread = threading.Thread(target=reader, daemon=True)
+            thread.start()
+            thread.join(timeout=timeout)
+            if proc.poll() is None:
+                proc.send_signal(signal.SIGTERM)
+                try:
+                    proc.wait(timeout=sigterm_grace)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait()
+            thread.join(timeout=2.0)
+
+        returncode = proc.returncode
+
+    return subprocess.CompletedProcess(
+        args=cmd,
+        returncode=returncode,
+        stdout=b''.join(captured),
+        stderr=None,
+    )

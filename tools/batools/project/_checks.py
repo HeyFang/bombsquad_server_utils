@@ -330,7 +330,11 @@ def check_python_files(self: ProjectUpdater) -> None:
             if name in ignores.get(dir_of_packages, {}):
                 continue
             fullpath = os.path.join(self.projroot, dir_of_packages, name)
-            if not name.startswith('.') and os.path.isdir(fullpath):
+            if (
+                not name.startswith('.')
+                and name != '__pycache__'
+                and os.path.isdir(fullpath)
+            ):
                 packagedirs.append(fullpath)
 
     for packagedir in packagedirs:

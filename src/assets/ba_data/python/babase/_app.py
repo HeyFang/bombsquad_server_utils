@@ -510,6 +510,15 @@ class App:
         except Exception:
             self._fault_handler_armed = False
             return self.SHUTDOWN_SUICIDE_TIMEOUT_SECONDS
+        # Announce the arm so later diagnostics can tell "shutdown
+        # legitimately took ~15s" from "shutdown got stuck" — if the
+        # disarm INFO doesn't appear before the faulthandler dump, the
+        # hang is somewhere between here and ``_pre_interpreter_shutdown``
+        # finishing.
+        lifecyclelog.info(
+            'suicide watchdog armed; dump in %.0fs',
+            self.SHUTDOWN_SUICIDE_TIMEOUT_SECONDS,
+        )
         return (
             self.SHUTDOWN_SUICIDE_TIMEOUT_SECONDS
             + self.SHUTDOWN_FAULTHANDLER_RUNWAY_SECONDS
@@ -534,6 +543,11 @@ class App:
         import gc
         from babase._env import interpreter_shutdown_sanity_checks
 
+        # Bracket with timing logs so a slow tail-end shutdown is
+        # distinguishable from a true hang: if the faulthandler dump
+        # beats the "end" line, we're stuck inside this function.
+        start_time = time.monotonic()
+        lifecyclelog.info('pre-interpreter-shutdown begin')
         try:
             # Spin down connection pools or whatever else used for
             # networking.
@@ -541,8 +555,61 @@ class App:
 
             # Run a last round of cyclic garbage collection - mostly so
             # we keep ourselves aware of reference cycles that need
-            # cleaning up.
-            self.gc.collect(force=True)
+            # cleaning up. This has been observed eating the entire
+            # 15s watchdog budget in the wild, so time it explicitly.
+            #
+            # When running under basn, add two extra diagnostics around
+            # this collect:
+            #
+            #   1. ``gc.DEBUG_STATS`` for the duration of this single
+            #      collect. The CPython GC prints per-generation
+            #      progress to stderr ("gc: collecting generation N..."
+            #      / "gc: done, M unreachable, ..."), so a hang in
+            #      gen-2 leaves us with the gen-0/gen-1 trace and a
+            #      missing gen-2 "done" line — pinpoint signal for the
+            #      stuck phase. Output is minimal in a healthy run.
+            #
+            #   2. ``len(gc.get_objects())`` snapshot just before the
+            #      collect. Tells us how many tracked objects the
+            #      collect was about to walk — if a hang fires later,
+            #      a large number here is itself signal that the heap
+            #      is bigger than expected.
+            #
+            # Order matters: enable DEBUG_STATS *before* the snapshot
+            # so that even if anything between here and the collect
+            # were to stall, the gen-N progress lines still fire when
+            # the collect eventually runs. An earlier version of this
+            # diagnostic also built a top-10 type histogram via
+            # ``Counter`` — we observed that itself eat the entire
+            # post-shutdown-begin tail-end on a real prod node (heap
+            # large enough that walking it took >4s), so the histogram
+            # is dropped pending a cheaper way to capture it. The
+            # count alone tells us "the heap is huge" which is the
+            # main thing we care about for now.
+            #
+            # Both gated to ``BASNLOG`` so interactive client runs
+            # (including dev sessions) stay quiet and per-run cost is
+            # zero outside basn-hosted games.
+            basnlog = os.environ.get('BASNLOG') == '1'
+            if basnlog:
+                prev_debug = gc.get_debug()
+                gc.set_debug(prev_debug | gc.DEBUG_STATS)
+                lifecyclelog.info(
+                    'pre-interpreter-shutdown pre-final-gc:'
+                    ' %d tracked objects.',
+                    len(gc.get_objects()),
+                )
+
+            gc_start = time.monotonic()
+            try:
+                self.gc.collect(force=True)
+            finally:
+                if basnlog:
+                    gc.set_debug(prev_debug)
+            lifecyclelog.info(
+                'pre-interpreter-shutdown final gc.collect took %.2fs',
+                time.monotonic() - gc_start,
+            )
 
             # Turn off any garbage-collector debugging or we'll get a
             # huge dump of stuff as Python is tearing itself down, which
@@ -561,6 +628,10 @@ class App:
             # General sanity checks for lingering threads/etc.
             interpreter_shutdown_sanity_checks()
         finally:
+            lifecyclelog.info(
+                'pre-interpreter-shutdown end (took %.2fs)',
+                time.monotonic() - start_time,
+            )
             # Cancel the shutdown faulthandler dump armed by the C++
             # side alongside the suicide timer. If anything above
             # raises, we still want to cancel so a slow interpreter

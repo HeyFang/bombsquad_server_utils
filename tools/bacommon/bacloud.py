@@ -10,10 +10,17 @@
 
 from __future__ import annotations
 
+from enum import Enum
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, assert_never, override
 
-from efro.dataclassio import ioprepped, IOAttrs
+from efro.dataclassio import (
+    ioprepped,
+    will_ioprep,
+    ioprep,
+    IOAttrs,
+    IOMultiType,
+)
 
 if TYPE_CHECKING:
     pass
@@ -42,7 +49,28 @@ if TYPE_CHECKING:
 #               archive commands (and eventually the workspace put
 #               path). Old clients don't understand the new field
 #               and would silently skip uploads.
-BACLOUD_VERSION = 18
+# 19 (2026-05): StreamCall protocol introduced. Adds a ``stream``
+#               flag to ``RequestData``, bumps ``end_command`` from a
+#               2-tuple to a 3-tuple (the new bool indicates the next
+#               request should be made in stream mode), adds a
+#               ``stream_frames`` field to ``ResponseData`` carrying
+#               ``StreamFrame`` instances, and introduces the
+#               ``StreamFrame`` / ``StreamOutput`` / ``StreamFinal``
+#               IOMultiTypes themselves. ``MIN_VERSION`` is bumped to
+#               match so older clients are rejected with a clear
+#               upgrade message rather than silently mishandling the
+#               new tuple shape.
+# 20 (2026-05): StreamCall Phase 2 wire-protocol additions for the
+#               basn-WebSocket fan-out path. Adds ``stream_ws`` to
+#               ``ResponseData`` (carrying a basn URL + signed
+#               capability token + expiry) so kickoff responses can
+#               redirect a client at a basn node's WebSocket
+#               endpoint instead of the existing ``_streamcall_poll``
+#               loop. Backwards-compatible with v19 in the wire
+#               sense (old clients ignore the unknown field and use
+#               ``end_command`` as before), but bumped so logs make
+#               version-skew obvious during the rollout.
+BACLOUD_VERSION = 20
 
 
 def asset_file_cache_path(filehash: str) -> str:
@@ -74,6 +102,14 @@ class RequestData:
     payload: Annotated[dict, IOAttrs('p')]
     tzoffset: Annotated[float, IOAttrs('z')]
     isatty: Annotated[bool, IOAttrs('y')]
+
+    #: Whether this request is being made in stream mode. Set when the
+    #: previous response's ``end_command`` 3-tuple flagged the next
+    #: call as streamed. Has a soft-default of ``False`` (so older
+    #: stored payloads without the field deserialize) but no Python
+    #: default — every call site must pass it explicitly so the
+    #: stream-mode intent is always visible at construction.
+    stream: Annotated[bool, IOAttrs('s', soft_default=False)]
 
 
 # Types used by the UploadPlan protocol. See ResponseData.UploadPlan.
@@ -177,6 +213,125 @@ class UploadPlanCommit:
 
     #: The opaque state dict from the original UploadPlan.
     state: Annotated[dict, IOAttrs('s')]
+
+
+# ---------------------------------------------------------------- #
+# StreamCall protocol types.
+# ---------------------------------------------------------------- #
+
+
+class StreamFrameTypeID(Enum):
+    """Type IDs for the :class:`StreamFrame` IOMultiType."""
+
+    OUTPUT = 'o'
+    FINAL = 'f'
+
+
+class StreamFrame(IOMultiType[StreamFrameTypeID]):
+    """One frame in a streamed bacloud command's output.
+
+    Producers emit a sequence of :class:`StreamOutput` frames as the
+    underlying call generates output, then exactly one
+    :class:`StreamFinal` frame carrying the terminal
+    :class:`ResponseData`. Consumers (bacloud directly in Phase 1, or
+    eventually via a basn WebSocket fan-out in Phase 2) iterate
+    frames in order and stop on the StreamFinal.
+    """
+
+    @override
+    @classmethod
+    def get_type_id(cls) -> StreamFrameTypeID:
+        raise NotImplementedError()
+
+    @override
+    @classmethod
+    def get_type(cls, type_id: StreamFrameTypeID) -> type[StreamFrame]:
+        # pylint: disable=cyclic-import
+        t = StreamFrameTypeID
+        if type_id is t.OUTPUT:
+            return StreamOutput
+        if type_id is t.FINAL:
+            return StreamFinal
+        assert_never(type_id)
+
+
+@ioprepped
+@dataclass
+class StreamOutput(StreamFrame):
+    """Incremental rendered output to print at the consumer."""
+
+    text: Annotated[str, IOAttrs('t')] = ''
+
+    @override
+    @classmethod
+    def get_type_id(cls) -> StreamFrameTypeID:
+        return StreamFrameTypeID.OUTPUT
+
+
+# Forward-prepped: ``response`` references :class:`ResponseData`,
+# which is defined further down. We declare it here so the class
+# exists before ``ResponseData`` can reference :class:`StreamFrame`
+# for its ``stream_frames`` field, then explicitly :func:`ioprep`
+# this class at the bottom of the module once both are defined.
+@will_ioprep
+@dataclass
+class StreamFinal(StreamFrame):
+    """Terminal frame carrying the call's :class:`ResponseData`.
+
+    The inner ``response`` is processed by the consumer as if it had
+    been the response to the originating non-streamed request — it
+    can carry messages, ``end_command`` chains, errors, and so on.
+    """
+
+    # Lambda needed because :class:`ResponseData` isn't defined yet at
+    # this point; resolved at instance-construction time.
+    response: Annotated['ResponseData', IOAttrs('r')] = field(
+        default_factory=(
+            lambda: ResponseData()  # pylint: disable=unnecessary-lambda
+        )
+    )
+
+    @override
+    @classmethod
+    def get_type_id(cls) -> StreamFrameTypeID:
+        return StreamFrameTypeID.FINAL
+
+
+@ioprepped
+@dataclass
+class StreamWS:
+    """Direct-WebSocket pickup info for a streamed bacloud call.
+
+    Phase 2 of the streamcall-unification initiative. When a kickoff
+    response carries a ``stream_ws`` field, the bacloud client should
+    open a WebSocket to ``basn_url`` (passing ``ws_token`` on the
+    handshake) instead of falling into the ``_streamcall_poll``
+    loop. The token is a signed capability blob — basn validates it
+    locally with no bamaster hop. Old clients (v19) that don't know
+    about this field naturally fall back to the polling path via
+    ``end_command``; both fields are populated on responses to the
+    new clients to keep the fallback available.
+
+    The token expires after a short window (~5 min). For mid-stream
+    WS drops past expiry, the client refreshes via a small bamaster
+    RPC rather than re-kicking-off the whole stream.
+    """
+
+    #: Hostname (and path) the client should open a WebSocket to.
+    #: Specific basn node — bamaster picks one at kickoff time
+    #: based on capacity in the originator's region. Stream's
+    #: lifetime is bound to that node.
+    basn_url: Annotated[str, IOAttrs('u')]
+
+    #: Signed capability token. Carries call_id + originator
+    #: accountid + expiry + HMAC over the basn node's comm-token.
+    #: basn validates locally; bacloud passes it on the WS handshake
+    #: header without needing to inspect the contents.
+    ws_token: Annotated[str, IOAttrs('t')]
+
+    #: Unix-seconds expiry of ``ws_token``. Surfaced so the client
+    #: knows when to refresh on a mid-stream reconnect.
+    expiry_unix_seconds: Annotated[int, IOAttrs('e')]
 
 
 @ioprepped
@@ -450,7 +605,39 @@ class ResponseData:
     ] = '\n'
 
     #: If present, this command is run with these args at the end of
-    #: response processing.
+    #: response processing. Tuple is ``(command_name, args, stream)``;
+    #: when ``stream`` is True the client should set ``stream=True``
+    #: on the resulting :class:`RequestData`.
     end_command: Annotated[
-        tuple[str, dict] | None, IOAttrs('ec', store_default=False)
+        tuple[str, dict, bool] | None, IOAttrs('ec', store_default=False)
     ] = None
+
+    #: If present, the structured frames emitted by the in-progress
+    #: stream call this poll iteration covered. The client prints any
+    #: :class:`StreamOutput` frames in order and, on encountering a
+    #: :class:`StreamFinal`, treats its inner ``response`` as the
+    #: terminal :class:`ResponseData` to process. Polling responses
+    #: drive the loop via their own ``end_command`` (typically
+    #: another self-call with an updated cursor); set ``end_command``
+    #: to None on the response that contains the terminal frame.
+    stream_frames: Annotated[
+        list[StreamFrame] | None, IOAttrs('sf', store_default=False)
+    ] = None
+
+    #: If present, the client should switch to WebSocket fan-out
+    #: mode (open a connection to ``stream_ws.basn_url``, pass
+    #: ``stream_ws.ws_token`` on the handshake) instead of following
+    #: ``end_command`` for ``_streamcall_poll``. ``end_command`` is
+    #: typically populated alongside as a polling fallback for
+    #: older clients / fleets without basn — clients that understand
+    #: ``stream_ws`` should prefer it. See :class:`StreamWS` for
+    #: details on token handling and reconnect.
+    stream_ws: Annotated[
+        StreamWS | None, IOAttrs('sw', store_default=False)
+    ] = None
+
+
+# Now that :class:`ResponseData` exists in the module namespace,
+# finish prep of :class:`StreamFinal` (which references ResponseData
+# via its ``response`` field).
+ioprep(StreamFinal)

@@ -29,12 +29,15 @@ _TEST_GAME_DEFAULT_PORT = 43210
 
 
 def _test_game_run_parse_args() -> dict[str, object]:
+    # pylint: disable=too-many-branches
     """Parse ``test_game_run`` argv.
 
     Returns a dict with keys ``instance``, ``log_levels``, ``timeout``,
-    ``fleet``, ``headless``, ``exec_code``, and ``port``. Default is a
-    headless server build; pass ``--gui`` for an interactive GUI
-    client build.
+    ``fleet``, ``headless``, ``exec_code``, ``port``, ``ex_build``,
+    ``user_data``, ``reset_connectivity``, ``debug_network_toggle``,
+    ``gc_warning_threshold``, ``gc_debug_types``,
+    ``gc_debug_type_limit``. Default is a headless server build; pass
+    ``--gui`` for an interactive GUI client build.
     """
     args = sys.argv[2:]
     out: dict[str, object] = {
@@ -47,6 +50,11 @@ def _test_game_run_parse_args() -> dict[str, object]:
         'port': None,
         'ex_build': False,
         'user_data': False,
+        'reset_connectivity': False,
+        'debug_network_toggle': False,
+        'gc_warning_threshold': None,
+        'gc_debug_types': None,
+        'gc_debug_type_limit': None,
     }
     while args:
         if args[0] == '--instance' and len(args) > 1:
@@ -76,6 +84,21 @@ def _test_game_run_parse_args() -> dict[str, object]:
         elif args[0] == '--user-data':
             out['user_data'] = True
             args = args[1:]
+        elif args[0] == '--reset-connectivity':
+            out['reset_connectivity'] = True
+            args = args[1:]
+        elif args[0] == '--debug-network-toggle':
+            out['debug_network_toggle'] = True
+            args = args[1:]
+        elif args[0] == '--gc-warning-threshold' and len(args) > 1:
+            out['gc_warning_threshold'] = int(args[1])
+            args = args[2:]
+        elif args[0] == '--gc-debug-types' and len(args) > 1:
+            out['gc_debug_types'] = args[1]
+            args = args[2:]
+        elif args[0] == '--gc-debug-type-limit' and len(args) > 1:
+            out['gc_debug_type_limit'] = int(args[1])
+            args = args[2:]
         else:
             raise RuntimeError(f'Unexpected arg: {args[0]}')
     if out['port'] is not None and not out['headless']:
@@ -267,6 +290,7 @@ def _test_game_build_cmd(
 
 
 def test_game_run() -> None:
+    # pylint: disable=too-many-statements
     """Run the game for testing purposes in a siloed instance dir.
 
     Usage::
@@ -274,6 +298,10 @@ def test_game_run() -> None:
         tools/pcommand test_game_run [--instance NAME] [--gui]
             [--port N] [--exec CODE] [--log LEVELS] [--timeout SECONDS]
             [--fleet FLEET] [--user-data]
+            [--reset-connectivity] [--debug-network-toggle]
+            [--gc-warning-threshold N]
+            [--gc-debug-types TYPE1,TYPE2,...]
+            [--gc-debug-type-limit N]
 
     Always runs in the foreground and blocks until the process exits
     or ``--timeout`` elapses. Callers that want to supervise multiple
@@ -326,6 +354,38 @@ def test_game_run() -> None:
       user-reported issues that only manifest with real account
       state. Incompatible with headless (servers have no user data
       dir in the same sense).
+    - ``--reset-connectivity``: Sets ``BA_CONNECTIVITY_RESET=1`` for
+      the child process so saved zone-ping warm-start data is
+      discarded on launch. Useful for testing initial-cycle
+      convergence behavior from a clean slate.
+    - ``--debug-network-toggle``: Sets
+      ``BA_NETWORK_AVAILABILITY_DEBUG_TOGGLE=1`` for the child
+      process so the platform-layer network-availability signal
+      starts in the unavailable state and toggles every 5 seconds
+      thereafter — exercises gating consumers without actually
+      severing the network.
+    - ``--gc-warning-threshold N``: Sets ``BA_GC_WARNING_THRESHOLD``.
+      Override the object-count threshold above which a cyclic-gc
+      pass logs a WARNING (default 50). Lower it to surface smaller
+      cycles, raise it to silence known library-internal cycles
+      while iterating.
+    - ``--gc-debug-types TYPE1,TYPE2,...``: Sets
+      ``BA_GC_DEBUG_TYPES``. Comma-separated list of type names
+      whose collected instances get extra ref-dump details in the
+      GC summary (overrides the cloud-supplied
+      ``gc_debug_types``). Use to track down what's holding a
+      specific type in a cycle without needing a cloud-config push.
+    - ``--gc-debug-type-limit N``: Sets ``BA_GC_DEBUG_TYPE_LIMIT``.
+      Max number of instances per debug-type to dump (overrides
+      the cloud-supplied limit).
+
+    Env-var-setting flags (``--reset-connectivity``,
+    ``--debug-network-toggle``, etc.) exist so that callers don't
+    need to set ``BA_*`` env vars in the command prefix, which
+    changes the wrapper's command signature and triggers a fresh
+    sandbox permission prompt per invocation. If you find yourself
+    wanting to set a new ``BA_*`` debug env var for a test, add a
+    matching flag here rather than passing the env var directly.
     """
     import os
     import signal
@@ -340,12 +400,22 @@ def test_game_run() -> None:
     exec_code = opts['exec_code']
     port = opts['port']
     user_data = opts['user_data']
+    reset_connectivity = opts['reset_connectivity']
+    debug_network_toggle = opts['debug_network_toggle']
+    gc_warning_threshold = opts['gc_warning_threshold']
+    gc_debug_types = opts['gc_debug_types']
+    gc_debug_type_limit = opts['gc_debug_type_limit']
     assert isinstance(instance, str)
     assert isinstance(log_levels, str)
     assert isinstance(timeout, int)
     assert isinstance(fleet, str)
     assert isinstance(headless, bool)
     assert isinstance(user_data, bool)
+    assert isinstance(reset_connectivity, bool)
+    assert isinstance(debug_network_toggle, bool)
+    assert gc_warning_threshold is None or isinstance(gc_warning_threshold, int)
+    assert gc_debug_types is None or isinstance(gc_debug_types, str)
+    assert gc_debug_type_limit is None or isinstance(gc_debug_type_limit, int)
     assert exec_code is None or isinstance(exec_code, str)
     assert port is None or isinstance(port, int)
 
@@ -382,6 +452,21 @@ def test_game_run() -> None:
         env['BA_LOG_LEVELS'] = log_levels
     if fleet:
         env['BA_FLEET'] = fleet
+    # Translate debug-flavored flags into the env vars the engine
+    # already reads. Routing them through pcommand flags (rather than
+    # caller-set env vars) keeps the wrapper's command signature
+    # stable, so no fresh sandbox permission prompt fires per
+    # invocation.
+    if reset_connectivity:
+        env['BA_CONNECTIVITY_RESET'] = '1'
+    if debug_network_toggle:
+        env['BA_NETWORK_AVAILABILITY_DEBUG_TOGGLE'] = '1'
+    if gc_warning_threshold is not None:
+        env['BA_GC_WARNING_THRESHOLD'] = str(gc_warning_threshold)
+    if gc_debug_types is not None:
+        env['BA_GC_DEBUG_TYPES'] = gc_debug_types
+    if gc_debug_type_limit is not None:
+        env['BA_GC_DEBUG_TYPE_LIMIT'] = str(gc_debug_type_limit)
     # Hand the silo's automation FIFO path to the binary; it'll create
     # the fifo on startup if it doesn't exist and start a reader thread.
     # See src/ballistica/base/automation/automation.h. Ignored entirely

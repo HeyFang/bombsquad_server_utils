@@ -377,6 +377,9 @@ def is_asyncio_streams_communication_error(exc: BaseException) -> bool:
         if 'SSL: SSLV3_ALERT_HANDSHAKE_FAILURE' in excstr:
             return True
 
+        if 'record layer failure' in excstr:
+            return True
+
     return False
 
 

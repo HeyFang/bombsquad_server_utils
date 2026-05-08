@@ -6,7 +6,9 @@
 #include <sys/stat.h>
 
 #include <cstdio>
+#include <functional>
 #include <list>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
@@ -311,6 +313,75 @@ class Platform {
   virtual auto GetBroadcastAddrs() -> std::vector<uint32_t>;
   virtual auto SetSocketNonBlocking(int sd) -> bool;
 
+  /// Callback type for receiving network path availability state.
+  using NetworkAvailabilityCallback = std::function<void(bool available)>;
+
+  /// Register a callback to receive OS-reported network path
+  /// availability.
+  ///
+  /// API contract: callers MUST assume the network is unavailable
+  /// until a callback fires with ``true``. The callback is invoked
+  /// only on changes from the assumed-or-cached state, so consumers
+  /// that haven't yet been told ``true`` should treat the network
+  /// as down. This avoids both a redundant initial cb(false) and
+  /// the race where startup code reads a stale "available" before
+  /// the OS has reported.
+  ///
+  /// In practice this means:
+  ///   - First registration: typically no synchronous fire. The
+  ///     callback fires once the OS reports (which happens promptly:
+  ///     synchronous on platforms with no native monitoring; usually
+  ///     within milliseconds on those that do).
+  ///   - Late registration (after the OS has already reported
+  ///     ``true``): a synchronous cb(true) fires inside this call so
+  ///     the late consumer learns current state immediately.
+  ///   - Any state change: async cb fires on whatever thread the OS
+  ///     dispatches on.
+  ///
+  /// The callback may fire on ANY thread — the OS-provided dispatch
+  /// queue, a worker thread, or the registration thread itself.
+  /// Callers are responsible for marshaling to whatever thread they
+  /// need, and for any synchronization on state they touch.
+  ///
+  /// 'false' is a strict "definitely offline" signal — the OS sees
+  /// no usable network path (airplane mode, wifi off with no
+  /// cellular, ethernet unplugged); callers should short-circuit
+  /// network attempts. 'true' is "maybe online" — captive portals,
+  /// ISP outages, and DNS issues still report 'true', so existing
+  /// reachability probes are still required.
+  ///
+  /// On platforms without a native implementation, the default
+  /// DoStartNetworkAvailabilityMonitoring() reports ``true`` once
+  /// and never again, preserving today's "always try" behavior. As
+  /// a testing aid, setting environment variable
+  /// BA_NETWORK_AVAILABILITY_DEBUG_TOGGLE=1 substitutes a thread
+  /// that toggles every 5 seconds (starting offline) in place of
+  /// any real platform monitoring, so consumers can be exercised
+  /// through both states without actually severing the network.
+  ///
+  /// There is no deregistration; callbacks are expected to live for
+  /// the app's lifetime.
+  ///
+  /// Non-virtual: this method manages the callback list, change
+  /// dedup, and DEBUG-level logging on transitions. Platform
+  /// subclasses hook in by overriding
+  /// DoStartNetworkAvailabilityMonitoring() and reporting state
+  /// changes via SetNetworkAvailability().
+  void AddNetworkAvailabilityCallback(NetworkAvailabilityCallback cb);
+
+  /// Stop dispatching network-availability changes to registered
+  /// callbacks. Idempotent. Once called, subsequent
+  /// SetNetworkAvailability() calls and synchronous fires from
+  /// AddNetworkAvailabilityCallback() are no-ops, and OS-level
+  /// monitors that are still running on detached threads
+  /// (NWPathMonitor, NLM event sink, ConnectivityManager.NetworkCallback)
+  /// have no further effect. The OS monitors themselves are not
+  /// torn down — they live until process exit — only the dispatch
+  /// path is silenced. Intended to be called early in app shutdown,
+  /// before subscriber state (e.g. Python interpreter, logic-thread
+  /// objects) starts being torn down.
+  void StopNetworkAvailabilityDispatch();
+
 #pragma mark ERRORS & DEBUGGING ------------------------------------------------
 
   /// Should return a subclass of NativeStackTrace allocated via new. It is
@@ -477,10 +548,29 @@ class Platform {
 
   virtual void HandleLowLevelDebugLog(const std::string& msg);
 
+  /// Called once on the first network-availability registration for
+  /// the platform to subscribe to OS-level monitoring (NWPathMonitor,
+  /// ConnectivityManager, INetworkListManager, NetworkManager via
+  /// D-Bus, etc.) and feed state back through SetNetworkAvailability().
+  /// The default implementation is a no-op (value stays at the
+  /// initial 'true'). Not invoked when the
+  /// BA_NETWORK_AVAILABILITY_DEBUG_TOGGLE env var is set; the debug
+  /// toggle thread runs in place of OS monitoring.
+  virtual void DoStartNetworkAvailabilityMonitoring();
+
+  /// Called by subclasses (and the debug toggler) to report the
+  /// current network availability state. Thread-safe; callable from
+  /// any thread. Logs at DEBUG and dispatches to all registered
+  /// callbacks if (and only if) the value differs from the last
+  /// reported value.
+  void SetNetworkAvailability(bool available);
+
   Platform();
   virtual ~Platform();
 
  private:
+  void RunNetworkAvailabilityDebugToggle_();
+
   bool is_stdin_a_terminal_{};
   bool have_has_touchscreen_value_{};
   bool have_touchscreen_{};
@@ -497,6 +587,24 @@ class Platform {
 
   // Temp; should be able to remove this once Swift 5.10 is out.
   std::list<std::string> mac_music_app_playlists_;
+
+  std::mutex network_availability_mutex_;
+  std::vector<NetworkAvailabilityCallback> network_availability_callbacks_;
+  bool network_availability_monitoring_started_{};
+  // Defaults to false so consumers must wait for an affirmative
+  // signal (a callback firing 'true') before assuming network is
+  // up. This avoids races where code at startup reads the value
+  // before the platform's first OS report has arrived. Platforms
+  // without a real implementation get an immediate 'true' from the
+  // default DoStartNetworkAvailabilityMonitoring() so they're not
+  // stuck offline forever.
+  bool network_availability_value_{false};
+  // Set by StopNetworkAvailabilityDispatch() during app shutdown.
+  // Once true, SetNetworkAvailability and the synchronous fire in
+  // AddNetworkAvailabilityCallback are no-ops. Lets us silence
+  // late OS-callback dispatches before subscriber state is torn
+  // down by the shutdown cascade.
+  bool network_availability_dispatch_stopped_{};
 };
 
 }  // namespace ballistica::core

@@ -69,7 +69,8 @@
     "websockets",
     "websockets.asyncio.client",
     "websockets.asyncio.connection",
-    "websockets.asyncio.server"
+    "websockets.asyncio.server",
+    "websockets.exceptions"
   ],
   "python_paths": [
     "src/assets/ba_data/python",

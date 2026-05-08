@@ -57,8 +57,8 @@ logger = logging.getLogger('ba.env')
 
 # Build number and version of the ballistica binary we expect to be
 # using.
-TARGET_BALLISTICA_BUILD = 22827
-TARGET_BALLISTICA_VERSION = '1.7.62'
+TARGET_BALLISTICA_BUILD = 22841
+TARGET_BALLISTICA_VERSION = '1.7.63'
 
 
 @dataclass
@@ -330,7 +330,15 @@ def _cache_ninja_rampage(cache_dir: str) -> None:
                 logging.getLogger('ba.cache').debug(
                     "Cache-ninja assasinated '%s'.", fullpath
                 )
-                os.unlink(fullpath)
+                # The whole point of this feature is that downstream
+                # code must handle missing cache files; the kill itself
+                # is not load-bearing. Swallow OSError so a read-only
+                # cache (sandboxed envs, restrictive perms) or a file
+                # that vanished mid-walk doesn't fatal startup.
+                try:
+                    os.unlink(fullpath)
+                except OSError:
+                    pass
 
 
 def _read_app_config(config_file_path: str) -> dict:

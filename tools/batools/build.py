@@ -468,17 +468,21 @@ def checkenv() -> None:
             'clang-format is required; please install it via apt, brew, etc.'
         )
 
-    # Make sure they've got pip for that python version.
+    # Make sure they've got uv on PATH (we use it to manage venvs and
+    # install packages; ``make env`` will fail without it). Historically
+    # this checked for ``pip`` inside the venv, but since switching to
+    # uv-built venvs that no longer holds — uv doesn't seed pip into
+    # venvs by default and we drive installs via ``uv pip install``.
     if (
         subprocess.run(
-            [sys.executable, '-m', 'pip', '--version'],
-            check=False,
-            capture_output=True,
+            ['uv', '--version'], check=False, capture_output=True
         ).returncode
         != 0
     ):
         raise CleanError(
-            f'pip (for {sys.executable}) is required; please install it.'
+            'uv is required; please install it'
+            ' (https://docs.astral.sh/uv/, brew install uv, or'
+            ' curl -LsSf https://astral.sh/uv/install.sh | sh).'
         )
 
     print(f'{Clr.BLD}Environment ok.{Clr.RST}', flush=True)

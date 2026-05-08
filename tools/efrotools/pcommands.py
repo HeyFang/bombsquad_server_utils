@@ -822,3 +822,78 @@ def showtime() -> None:
             f'{clr.RED}{label} failed in {elapsed:.2f}s.{clr.RST}'
         )
         sys.exit(result.returncode)
+
+
+def apply_venv_patches() -> None:
+    """Apply patches listed in ``config/venv_patches.json`` to the venv.
+
+    Run this after package install on freshly-built venvs (``uv pip
+    install`` in current Makefile flows; historically ``pip install``).
+    Each patch is a literal-string find-and-replace against a file in
+    site-packages. See :mod:`efro.venvpatch` for the schema.
+
+    Args (positional, all optional):
+      patches_path: path to the patches JSON. Default
+        ``config/venv_patches.json``. If the file does not exist,
+        this command is a clean no-op (so projects without any
+        patches don't need to opt out explicitly).
+      ``--no-error``: if present, mismatched / missing patches are
+        logged and skipped instead of erroring out. Use this on
+        production-runtime installer flows where a partial venv
+        beats a failed boot. Dev ``make env`` should leave the
+        default error-on-mismatch behaviour intact.
+    """
+    import os
+
+    args = pcommand.get_args()
+    allow_mismatches = '--no-error' in args
+    positional = [a for a in args if not a.startswith('--')]
+    patches_path = positional[0] if positional else 'config/venv_patches.json'
+
+    if not os.path.exists(patches_path):
+        return
+
+    # Configure a minimal logger so the apply messages reach the
+    # user's console for the dev `make env` flow. Production
+    # installers will have their own root handler set up already.
+    import logging
+
+    if not logging.getLogger().handlers:
+        logging.basicConfig(level=logging.INFO, format='%(message)s')
+
+    from efro.venvpatch import load_patches_from_file, apply_patches
+
+    out = load_patches_from_file(patches_path)
+    apply_patches(out.patches, allow_mismatches=allow_mismatches)
+
+
+def check_venv_patches() -> None:
+    """Verify ``config/venv_patches.json`` patches are applied.
+
+    Prints a summary and exits non-zero if any mismatch is found.
+    See :func:`efro.venvpatch.check_patches` for log details — each
+    mismatch is logged at CRITICAL.
+    """
+    import os
+    from efro.error import CleanError
+
+    args = pcommand.get_args()
+    positional = [a for a in args if not a.startswith('--')]
+    patches_path = positional[0] if positional else 'config/venv_patches.json'
+
+    if not os.path.exists(patches_path):
+        return
+
+    import logging
+
+    if not logging.getLogger().handlers:
+        logging.basicConfig(level=logging.INFO, format='%(message)s')
+
+    from efro.venvpatch import load_patches_from_file, check_patches
+
+    out = load_patches_from_file(patches_path)
+    mismatches = check_patches(out.patches)
+    if mismatches:
+        raise CleanError(
+            f'{mismatches} venv-patch mismatch(es); see CRITICAL' ' logs above.'
+        )

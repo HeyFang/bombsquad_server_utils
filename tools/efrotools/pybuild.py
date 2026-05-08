@@ -287,9 +287,14 @@ def build_android(rootdir: str, arch: str, debug: bool = False) -> None:
     print('python build complete! (android/' + arch + ')')
 
 
-def patch_modules_setup(python_dir: str, baseplatform: str) -> None:
+def patch_modules_setup(
+    python_dir: str, baseplatform: str, python_version: str = '3.13'
+) -> None:
     """Muck with the Setup.* files Python uses to build modules."""
     del baseplatform  # Unused.
+
+    if python_version not in ('3.13', '3.14'):
+        raise ValueError(f'Unsupported python_version: {python_version!r}')
 
     assert ' ' not in python_dir
 
@@ -322,6 +327,8 @@ def patch_modules_setup(python_dir: str, baseplatform: str) -> None:
     #
     # TODO(ericf): could automate a warning for at least the last part
     #  of that.
+    #
+    # Modules common to both 3.13 and 3.14.
     cmodules: set[tuple[str, int]] = {
         ('_asyncio', 1),
         ('_bisect', 1),
@@ -332,17 +339,14 @@ def patch_modules_setup(python_dir: str, baseplatform: str) -> None:
         ('_codecs_jp', 1),
         ('_codecs_kr', 1),
         ('_codecs_tw', 1),
-        ('_contextvars', 1),
         # ('_crypt', 1),
         ('_csv', 1),
         ('_ctypes_test', 1),
         ('_curses_panel', 1),
         ('_curses', 1),
-        ('_datetime', 1),
         ('_decimal', 1),
         ('_gdbm', 1),
         ('_dbm', 1),
-        ('_elementtree', 1),
         ('_heapq', 1),
         ('_json', 1),
         ('_lsprof', 1),
@@ -350,7 +354,6 @@ def patch_modules_setup(python_dir: str, baseplatform: str) -> None:
         ('_md5', 1),
         ('_multibytecodec', 1),
         ('_multiprocessing', 1),
-        ('_opcode', 1),
         ('_pickle', 1),
         ('_posixsubprocess', 1),
         ('_posixshmem', 1),
@@ -368,7 +371,6 @@ def patch_modules_setup(python_dir: str, baseplatform: str) -> None:
         ('_testinternalcapi', 1),
         ('_testmultiphase', 1),
         ('_testsinglephase', 1),
-        ('_testexternalinspection', 1),
         ('_testclinic', 1),
         ('_sqlite3', 1),
         ('_uuid', 1),
@@ -399,38 +401,91 @@ def patch_modules_setup(python_dir: str, baseplatform: str) -> None:
         ('readline', 1),
     }
 
+    # Per-version deltas. In 3.14, several formerly-Setup.stdlib.in
+    # modules (_contextvars, _datetime, _elementtree, _opcode) moved
+    # into the core build (no longer separate entries here, but still
+    # importable — Python's build system compiles them in
+    # automatically). _testexternalinspection was renamed to
+    # _remote_debugging. New additions: _hmac (C accelerator),
+    # _zstd (PEP 784), xxsubtype (test/example).
+    if python_version == '3.13':
+        cmodules |= {
+            ('_contextvars', 1),
+            ('_datetime', 1),
+            ('_elementtree', 1),
+            ('_opcode', 1),
+            ('_testexternalinspection', 1),
+        }
+    else:
+        assert python_version == '3.14'
+        cmodules |= {
+            ('_hmac', 1),
+            ('_remote_debugging', 1),
+            ('_zstd', 1),
+            ('xxsubtype', 1),
+        }
+
     # The set of modules we want statically compiled into our Python lib.
+    # Common base; per-version extras follow.
     enables = {
         '_asyncio',
         'array',
         'cmath',
         'math',
-        '_contextvars',
         '_struct',
         '_random',
-        '_elementtree',
         '_pickle',
-        '_datetime',
         '_zoneinfo',
         '_bisect',
         '_heapq',
         '_json',
         '_ctypes',
         '_statistics',
-        '_opcode',
         'unicodedata',
         'fcntl',
         'select',
         'mmap',
         '_csv',
         '_socket',
-        '_blake2',
         '_lzma',
         '_sqlite3',
         'binascii',
         '_posixsubprocess',
         'zlib',
     }
+    if python_version == '3.13':
+        # _contextvars, _datetime, _elementtree, _opcode are explicit
+        # in 3.13's Setup.stdlib.in; in 3.14 they're built in via
+        # other paths and the names are no longer present here.
+        # _blake2 is enabled directly here in 3.13 because there's
+        # no _hmac module bringing the Hacl Blake2 backend
+        # implicitly (see 3.14 branch comment below).
+        enables |= {
+            '_contextvars',
+            '_datetime',
+            '_elementtree',
+            '_opcode',
+            '_blake2',
+        }
+    else:
+        assert python_version == '3.14'
+        # _hmac is the new C accelerator in 3.14; we want it. It
+        # also pulls in the full Hacl backend (Blake2b/Blake2s/MD5/
+        # SHA1/SHA2/SHA3 + Memzero) unconditionally, per the
+        # comment in Setup.stdlib.in: "Since HMAC is always
+        # supported, the HACL* implementation modules must be
+        # built unconditionally." For that reason we deliberately
+        # do NOT enable _blake2 in 3.14 — doing so would link the
+        # Blake2 hacl objects a second time and produce duplicate-
+        # symbol errors. hashlib.blake2{b,s}() falls through to
+        # _hashlib (OpenSSL 3.0+ provides BLAKE2). The other
+        # 3.14-new modules (_remote_debugging, _zstd, xxsubtype)
+        # are tracked in cmodules so they get explicitly disabled
+        # — _zstd would need a libzstd.a we don't build, and the
+        # others we don't ship.
+        enables |= {
+            '_hmac',
+        }
 
     # Muck with things in line form for a bit.
     lines = ftxt.splitlines()

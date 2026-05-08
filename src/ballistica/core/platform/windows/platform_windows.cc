@@ -6,6 +6,9 @@
 #include <direct.h>
 #include <fcntl.h>
 #include <io.h>
+#include <netlistmgr.h>
+#include <objbase.h>
+#include <ocidl.h>
 #include <rpc.h>
 #include <shellapi.h>
 #include <shlobj_core.h>
@@ -27,12 +30,14 @@
 #include <list>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
 #pragma comment(lib, "Rpcrt4.lib")
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "iphlpapi.lib")
+#pragma comment(lib, "ole32.lib")
 #if BA_DEBUG_BUILD
 #pragma comment(lib, "python313_d.lib")
 #else
@@ -1555,6 +1560,128 @@ void PlatformWindows::GetTextBoundsAndWidth(const std::string& text, Rect* r,
 }
 
 #endif  // BA_ENABLE_OS_FONT_RENDERING
+
+// ---------------------------------------------------------------------------
+// Network availability monitoring (Windows Network List Manager)
+// ---------------------------------------------------------------------------
+
+// COM event sink for INetworkListManagerEvents. Forwards
+// connectivity-changed notifications to PlatformWindows::OnNetAvailChanged.
+class NetworkEventSink_ final : public INetworkListManagerEvents {
+ public:
+  NetworkEventSink_() = default;
+
+  // IUnknown.
+  HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppv) override {
+    if (ppv == nullptr) {
+      return E_POINTER;
+    }
+    if (riid == IID_IUnknown || riid == IID_INetworkListManagerEvents) {
+      *ppv = static_cast<INetworkListManagerEvents*>(this);
+      AddRef();
+      return S_OK;
+    }
+    *ppv = nullptr;
+    return E_NOINTERFACE;
+  }
+  ULONG STDMETHODCALLTYPE AddRef() override {
+    return InterlockedIncrement(&ref_count_);
+  }
+  ULONG STDMETHODCALLTYPE Release() override {
+    LONG c = InterlockedDecrement(&ref_count_);
+    if (c == 0) {
+      delete this;
+    }
+    return c;
+  }
+
+  // INetworkListManagerEvents.
+  HRESULT STDMETHODCALLTYPE
+  ConnectivityChanged(NLM_CONNECTIVITY conn) override {
+    bool available =
+        (conn
+         & (NLM_CONNECTIVITY_IPV4_INTERNET | NLM_CONNECTIVITY_IPV6_INTERNET))
+        != 0;
+    PlatformWindows::OnNetAvailChanged(available);
+    return S_OK;
+  }
+
+ private:
+  LONG ref_count_{1};
+};
+
+// Worker thread body: initializes COM as MTA, creates the
+// NetworkListManager, hooks up our event sink, reports the initial
+// connectivity state, then parks forever. Detached and never joined;
+// runs until process exit. References to nlm/cp/sink are intentionally
+// leaked since they live for the process lifetime.
+static void RunWindowsNetworkMonitor_() {
+  HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+  if (FAILED(hr)) {
+    g_core->logging->Log(LogName::kBaNetworking, LogLevel::kWarning,
+                         "Win NLM: CoInitializeEx failed; "
+                         "defaulting net-availability to true.");
+    PlatformWindows::OnNetAvailChanged(true);
+    return;
+  }
+
+  INetworkListManager* nlm = nullptr;
+  hr =
+      CoCreateInstance(__uuidof(NetworkListManager), nullptr, CLSCTX_ALL,
+                       IID_INetworkListManager, reinterpret_cast<void**>(&nlm));
+  if (FAILED(hr) || nlm == nullptr) {
+    g_core->logging->Log(LogName::kBaNetworking, LogLevel::kWarning,
+                         "Win NLM: CoCreateInstance failed; "
+                         "defaulting net-availability to true.");
+    PlatformWindows::OnNetAvailChanged(true);
+    return;
+  }
+
+  IConnectionPointContainer* cpc = nullptr;
+  hr = nlm->QueryInterface(IID_IConnectionPointContainer,
+                           reinterpret_cast<void**>(&cpc));
+  if (SUCCEEDED(hr) && cpc != nullptr) {
+    IConnectionPoint* cp = nullptr;
+    hr = cpc->FindConnectionPoint(IID_INetworkListManagerEvents, &cp);
+    if (SUCCEEDED(hr) && cp != nullptr) {
+      auto* sink = new NetworkEventSink_();
+      DWORD cookie = 0;
+      hr = cp->Advise(static_cast<INetworkListManagerEvents*>(sink), &cookie);
+      if (FAILED(hr)) {
+        sink->Release();
+      }
+      // cp/sink intentionally retained for process lifetime.
+    }
+    cpc->Release();
+  }
+
+  // Report initial state.
+  NLM_CONNECTIVITY initial = NLM_CONNECTIVITY_DISCONNECTED;
+  if (SUCCEEDED(nlm->GetConnectivity(&initial))) {
+    bool available =
+        (initial
+         & (NLM_CONNECTIVITY_IPV4_INTERNET | NLM_CONNECTIVITY_IPV6_INTERNET))
+        != 0;
+    PlatformWindows::OnNetAvailChanged(available);
+  }
+
+  // Park forever. With MTA, COM dispatches our connection-point events
+  // on RPC threads automatically; this thread doesn't need to pump
+  // messages.
+  while (true) {
+    Sleep(INFINITE);
+  }
+}
+
+void PlatformWindows::OnNetAvailChanged(bool available) {
+  if (auto* p = dynamic_cast<PlatformWindows*>(g_core->platform)) {
+    p->SetNetworkAvailability(available);
+  }
+}
+
+void PlatformWindows::DoStartNetworkAvailabilityMonitoring() {
+  std::thread(RunWindowsNetworkMonitor_).detach();
+}
 
 }  // namespace ballistica::core
 

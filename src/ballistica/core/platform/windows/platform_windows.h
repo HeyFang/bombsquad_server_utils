@@ -58,6 +58,13 @@ class PlatformWindows : public Platform {
   auto GetLegacyPlatformName() -> std::string override;
   auto GetLegacySubplatformName() -> std::string override;
 
+  /// Bridge entry point: a Windows ``INetworkListManagerEvents``
+  /// sink translates ``ConnectivityChanged`` notifications into
+  /// calls to this static helper, which forwards to the base
+  /// ``Platform::SetNetworkAvailability`` for dedup, dispatch, and
+  /// logging. Runs on whatever COM RPC thread dispatches the event.
+  static void OnNetAvailChanged(bool available);
+
 #if BA_ENABLE_OS_FONT_RENDERING
   void GetTextBoundsAndWidth(const std::string& text, Rect* r,
                              float* width) override;
@@ -73,6 +80,9 @@ class PlatformWindows : public Platform {
   bool have_stdin_stdout_ = false;
 
   auto FormatWinStackTraceForDisplay(WinStackTrace* stack_trace) -> std::string;
+
+ protected:
+  void DoStartNetworkAvailabilityMonitoring() override;
 
  private:
   std::mutex win_stack_mutex_;

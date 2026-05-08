@@ -236,6 +236,14 @@ void Logic::OnAppShutdown() {
   assert(g_base->CurrentContext().IsEmpty());
   assert(shutting_down_);
 
+  // Silence network-availability dispatch before any subsystem
+  // teardown. OS-level monitors (NWPathMonitor / NLM event sink /
+  // ConnectivityManager.NetworkCallback) keep running on detached
+  // threads until process exit; this gates the dispatch path so
+  // late callbacks don't reach subscribers (or the GIL) once the
+  // shutdown cascade starts dismantling them.
+  g_core->platform->StopNetworkAvailabilityDispatch();
+
   // Arm a Python traceback dump in case shutdown wedges; on platforms
   // where it can write (fd 2 usable) it will fire at the hard deadline
   // and the returned suicide-timer delay includes a bit of extra

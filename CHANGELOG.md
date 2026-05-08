@@ -1,4 +1,9 @@
-### 1.7.62 (build 22827, api 9, 2026-04-23)
+### 1.7.63 (build 22841, api 9, 2026-05-07)
+- Fixed mouse-wheel zooming in manual camera mode
+- Now using `uv` instead of `pip`. So now you'll need to install `uv` before
+  working with the repo, but this makes things lots faster to work with.
+
+### 1.7.62 (build 22837, api 9, 2026-05-04)
 - Added initial support for signing in with a Discord account as a first-class
   V2 login type, via Discord's Social SDK. Discord support is included in Mac,
   Windows, and Linux test-builds for now, but will expand to Android and Mac App
@@ -40,6 +45,11 @@
   'auto' being the default. In auto mode the app may opt to use insecure
   connections in environments that are known to muck with or block secure ones.
   Choose always or never if you don't want to give it that choice.
+- Added support for platforms to provide a 'network-available' state. This
+  allows us to skip trying to talk to cloud stuff when there's no network
+  connection or when we're in airplane mode or whatever which should save some
+  battery, and also it lets us reconnect *exactly* when the network comes back
+  online.
   
 
 ### 1.7.61 (build 22772, api 9, 2026-03-16)

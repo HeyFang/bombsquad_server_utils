@@ -47,7 +47,10 @@ def _servernodequery(scheme: str, *, force: bool) -> dict:
         params['test_insecure_directive'] = 'force'
     qs = urllib.parse.urlencode(params)
     url = f'{scheme}://{_PROD_BOOTSTRAP_HOST}/servernodequery?{qs}'
-    with urllib.request.urlopen(url, timeout=10.0) as resp:  # noqa: S310
+    # Generous timeout: a transient TLS handshake stall from CI to
+    # prod shouldn't take the whole test down (10.0 tripped us once
+    # already — see bombsquad.smoke #1468).
+    with urllib.request.urlopen(url, timeout=30.0) as resp:  # noqa: S310
         data: dict = json.loads(resp.read().decode())
         return data
 

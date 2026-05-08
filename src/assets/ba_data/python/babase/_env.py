@@ -240,10 +240,12 @@ def _bootstrap_networking() -> None:
 
 
 def _warm_start_bootstrap_connection(pool: urllib3.PoolManager) -> None:
+    from efro.error import is_urllib3_communication_error
     from efro.util import strip_exception_tracebacks
     from babase._logging import netlog
     import _babase
 
+    url = 'https://regional.ballistica.net/ping'
     starttime = time.monotonic()
     try:
         netlog.debug('Warm starting urllib3 pool...')
@@ -253,18 +255,29 @@ def _warm_start_bootstrap_connection(pool: urllib3.PoolManager) -> None:
         # actually *use* the results of this request; we're just getting
         # urllib3 to establish a connection to our first-choice server
         # to hopefully have it available for immediate use when needed.
-        response = pool.request('GET', 'https://regional.ballistica.net/ping')
+        response = pool.request('GET', url)
         _data = response.data
         netlog.debug(
             'Warm starting urllib3 pool succeeded in %.3fs.',
             time.monotonic() - starttime,
         )
     except Exception as exc:
-        netlog.debug(
-            'Warm starting urllib3 pool failed in %.3fs.',
-            time.monotonic() - starttime,
-            exc_info=True,
-        )
+        # Communication errors are expected (offline at startup, DNS
+        # hiccup, etc.) and not informative; keep them to a one-line
+        # debug. Reserve the traceback for genuinely unexpected
+        # exceptions.
+        if is_urllib3_communication_error(exc, url=url):
+            netlog.debug(
+                'Warm starting urllib3 pool failed in %.3fs'
+                ' (communication error).',
+                time.monotonic() - starttime,
+            )
+        else:
+            netlog.debug(
+                'Warm starting urllib3 pool failed in %.3fs.',
+                time.monotonic() - starttime,
+                exc_info=True,
+            )
         # Hopefully avoid reference cycles.
         strip_exception_tracebacks(exc)
 

@@ -21,6 +21,20 @@ if TYPE_CHECKING:
     pass
 
 # Version constants (easy to bump at the top of the file).
+#
+# To switch the active Python version, change PY_VER and PY_VER_EXACT
+# together. Per-version differences (patch hunks, module sets, etc.)
+# are handled by ``python_version`` checks in
+# ``efrotools.pybuild.patch_modules_setup`` — keep them in sync when
+# adding a new version or flipping back. The
+# ``python_version_android[_base]`` pcommands read these constants, so
+# the Makefile's ``$(AN_PV)`` / ``$(AN_PVB)`` and downstream
+# ``--out`` paths follow automatically.
+#
+# Both 3.13.12 and 3.14.4 have been verified building all 8 slices
+# end-to-end on linbeast as of 2026-05-03. To switch:
+#   PY_VER = '3.14'
+#   PY_VER_EXACT = '3.14.4'
 PY_VER = '3.13'
 PY_VER_EXACT = '3.13.12'
 ANDROID_API_VER = 24
@@ -506,7 +520,7 @@ def _patch_modules_setup(pydir: str) -> None:
     """Patch Modules/Setup.stdlib.in to build our desired module set."""
     from efrotools.pybuild import patch_modules_setup
 
-    patch_modules_setup(pydir, 'android')
+    patch_modules_setup(pydir, 'android', python_version=PY_VER)
 
 
 def _patch_fileutils_h(pydir: str) -> None:
@@ -937,12 +951,25 @@ def gather(rootdir: str) -> None:
             # Sanity check: all arch install lib dirs should be identical
             # (excluding _sysconfigdata_*.py which is arch-specific and
             # handled separately below).
+            #
+            # 3.14 introduced two more arch-specific files in this dir
+            # that we treat the same way: ``_sysconfig_vars_*.json``
+            # (a JSON sibling to _sysconfigdata, also per-arch — see
+            # PEP 739/CPython sysconfig refactor) and
+            # ``build-details.json`` (per-arch but with a fixed
+            # filename, so it can't coexist in a single unified pylib;
+            # we skip gathering it entirely — purely informational).
             for i in range(len(basepylib) - 1):
                 returncode = subprocess.run(
                     [
                         'diff',
                         # Arch-specific sysconfig data; gathered separately.
                         '--exclude=_sysconfigdata_*',
+                        # Arch-specific sysconfig vars (3.14+); gathered
+                        # separately like _sysconfigdata_*.
+                        '--exclude=_sysconfig_vars_*',
+                        # Per-arch but fixed-name; not gathered.
+                        '--exclude=build-details.json',
                         # Pre-compiled bytecode installed alongside .py files;
                         # differs across arches due to embedded timestamps even
                         # when the source is identical. Not gathered (rsync
@@ -971,6 +998,10 @@ def gather(rootdir: str) -> None:
                     '--recursive',
                     '--exclude',
                     '_sysconfigdata_*',  # arch-specific; handled separately
+                    '--exclude',
+                    '_sysconfig_vars_*',  # arch-specific (3.14+); same
+                    '--exclude',
+                    'build-details.json',  # per-arch fixed-name; skipped
                     '--exclude',
                     'config-*',  # arch-specific build config dir
                     '--include',
@@ -1013,6 +1044,24 @@ def gather(rootdir: str) -> None:
             )
             assert not os.path.exists(sysconfig_dst)
             subprocess.run(['cp', sysconfig_src, pylib_dst], check=True)
+
+            # 3.14+: Copy per-arch _sysconfig_vars_*.json sibling.
+            # Filenames embed the arch suffix so all arches coexist in
+            # the unified pylib. Earlier 3.13 builds don't produce
+            # this file — skip gracefully.
+            sysconfig_vars_src = (
+                f'{bases[arch]}/usr/lib/python{PY_VER}/'
+                f'_sysconfig_vars_{debug_d}_'
+                f'{arch_sysconfig_suffix[arch]}.json'
+            )
+            if os.path.exists(sysconfig_vars_src):
+                sysconfig_vars_dst = os.path.join(
+                    pylib_dst, os.path.basename(sysconfig_vars_src)
+                )
+                assert not os.path.exists(sysconfig_vars_dst)
+                subprocess.run(
+                    ['cp', sysconfig_vars_src, pylib_dst], check=True
+                )
 
             # Gather libs for this arch.
             libinst = arch_libinst[arch]

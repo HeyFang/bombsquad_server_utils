@@ -526,6 +526,7 @@ SCRIPT_TARGETS_PY_PUBLIC_TOOLS = \
   $(BUILD_DIR)/ba_data/python/bacommontools/__init__.py \
   $(BUILD_DIR)/ba_data/python/bacommontools/bacloud.py \
   $(BUILD_DIR)/ba_data/python/bacommontools/pcommands.py \
+  $(BUILD_DIR)/ba_data/python/bacommontools/streamws.py \
   $(BUILD_DIR)/ba_data/python/efro/__init__.py \
   $(BUILD_DIR)/ba_data/python/efro/call.py \
   $(BUILD_DIR)/ba_data/python/efro/cloudshell.py \
@@ -551,7 +552,8 @@ SCRIPT_TARGETS_PY_PUBLIC_TOOLS = \
   $(BUILD_DIR)/ba_data/python/efro/rpcws.py \
   $(BUILD_DIR)/ba_data/python/efro/terminal.py \
   $(BUILD_DIR)/ba_data/python/efro/threadpool.py \
-  $(BUILD_DIR)/ba_data/python/efro/util.py
+  $(BUILD_DIR)/ba_data/python/efro/util.py \
+  $(BUILD_DIR)/ba_data/python/efro/venvpatch.py
 
 SCRIPT_TARGETS_SO_PUBLIC_TOOLS = \
   

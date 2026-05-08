@@ -18,6 +18,19 @@ class Logging {
  public:
   Logging() = default;
 
+  /// Log a message to the engine's log system.
+  ///
+  /// IMPORTANT: This direct-string overload should only be used when the
+  /// message is a fixed string literal or already-built std::string that
+  /// requires no runtime construction at the call site. If the message
+  /// involves *any* runtime construction (concatenation, std::to_string,
+  /// formatting, etc.), use the lambda overload below instead — this
+  /// overload always evaluates its argument before the level check, so
+  /// the construction work happens even when the log level is disabled.
+  ///
+  /// This is especially important for DEBUG-level calls, which are
+  /// usually disabled in shipped builds; eager construction there pays a
+  /// real cost for nothing.
   void Log(LogName name, LogLevel level, const std::string& msg) {
     // Checking log-level here is more efficient than letting it happen in
     // Python land.
@@ -26,6 +39,8 @@ class Logging {
     }
   }
 
+  /// C-string convenience overload. Same rules as the std::string version
+  /// above: use the lambda overload for any runtime construction.
   void Log(LogName name, LogLevel level, const char* msg) {
     // Checking log-level here is more efficient than letting it happen in
     // Python land.
@@ -34,6 +49,8 @@ class Logging {
     }
   }
 
+  /// C-string convenience overload. Same rules as the std::string version
+  /// above: use the lambda overload for any runtime construction.
   void Log(LogName name, LogLevel level, char* msg) {
     // Checking log-level here is more efficient than letting it happen in
     // Python land.
@@ -42,10 +59,25 @@ class Logging {
     }
   }
 
-  /// Log call variant taking a call returning a string instead of a string
-  /// directly. This is recommended for log strings requiring significant
-  /// effort to construct, as said construction will be skipped if the log
-  /// level is not currently enabled.
+  /// Lambda overload: takes a callable returning std::string instead of a
+  /// string directly. The callable is invoked only when the log level is
+  /// enabled, so any construction work inside it is skipped otherwise.
+  ///
+  /// USE THIS for *any* dynamically-constructed log message — concatenation,
+  /// std::to_string, std::format, building a value from members, etc. —
+  /// not just for messages that feel "expensive" to build. Even a single
+  /// `"foo: " + std::to_string(x)` allocates and copies; routing it through
+  /// a lambda costs nothing extra at the call site and saves the work
+  /// whenever the level is off.
+  ///
+  /// DEBUG-level calls especially should default to this form: DEBUG is
+  /// usually off, so any string-building done at a direct-overload call
+  /// site is wasted work in the common case.
+  ///
+  /// Example:
+  ///   g_core->logging->Log(LogName::kBaNetworking, LogLevel::kDebug,
+  ///                        [&] { return "Got " + std::to_string(n)
+  ///                                     + " bytes from " + addr; });
   template <typename C>
   void Log(LogName name, LogLevel level, C getmsgcall) {
     // Make sure provided lambdas return std::string; otherwise it would be
