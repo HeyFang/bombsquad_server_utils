@@ -179,6 +179,7 @@ nitpick_ignore_regex = [
     # Types from private/skipped namespaces. Sphinx 9.x generates
     # cross-references to these from public API signatures even though
     # the modules themselves are excluded (see skip_prefixes below).
+    ('py:class', r'bacommon\.bacloud\..*'),
     ('py:class', r'bacommon\.classic\..*'),
     ('py:class', r'bacommon\.clienteffect\..*'),
     ('py:class', r'bacommon\.cloud\..*'),

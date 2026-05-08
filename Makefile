@@ -197,9 +197,14 @@ dummymodules-clean: env
 # automatically as a dependency of the env target.
 venv: .venv/.efro_venv_complete
 
-# Update pip requirements to latest versions.
+# Update pip requirements to latest versions, then regenerate the
+# lockfile from them. The make rule for ``config/requirements_lock.txt``
+# (further down) handles the actual regeneration based on
+# requirements.txt's mtime — calling ``make`` again here pulls
+# that rule in once requirements_upgrade has finished writing.
 venv-upgrade: env
 	$(PCOMMAND) requirements_upgrade config/requirements.txt
+	@$(MAKE) config/requirements_lock.txt
 
 venv-clean:
 	rm -rf .venv
@@ -768,6 +773,21 @@ update-check: env-pre-update
 
 # Tell make which of these targets don't represent files.
 .PHONY: update update-check
+
+
+################################################################################
+#                                                                              #
+#                                  Upgrading                                   #
+#                                                                              #
+################################################################################
+
+# Bump any pinned version numbers to latest.
+upgrade: env
+	@$(MAKE) venv-upgrade
+	@$(PCOMMANDBATCH) echo GRN Upgrade-Project: SUCCESS!
+
+# Tell make which of these targets don't represent files.
+.PHONY: upgrade
 
 
 ################################################################################
@@ -1409,21 +1429,63 @@ VENV_PYTHON ?= python3.13
 
 # Increment this to force all downstream venvs to fully rebuild. Useful after
 # removing requirements since upgrading venvs in place will never uninstall
-# stuff, and after switching the venv's installer (e.g. pip → uv).
-VENV_STATE = 4
+# stuff, after switching the venv's installer (e.g. pip → uv), or after
+# switching the lockfile shape (e.g. plain requirements.txt → hash-locked
+# requirements_lock.txt).
+VENV_STATE = 5
 
-# Update our virtual environment whenever reqs changes, Python version
-# changes, our venv's Python symlink breaks (can happen for minor Python
-# updates), or explicit state number changes. This is a dependency of env so
-# should not itself depend on env.
+# requirements_lock.txt is the auto-generated, hash-locked
+# companion to requirements.txt — every transitive dep pinned to
+# an exact version with multi-platform wheel hashes. Committed
+# alongside requirements.txt; do not hand-edit.
+#
+# Make's normal dependency tracking handles regeneration: editing
+# requirements.txt makes requirements_lock.txt stale, and any
+# subsequent ``make env`` (or explicit ``make venv-upgrade``)
+# regenerates it.
+#
+# ``--universal`` makes the lockfile cross-platform (we run on
+# macOS arm64+x86_64 and Linux x86_64+aarch64); ``--generate-hashes``
+# embeds per-wheel SHA256 hashes that uv verifies on install.
+#
+# (Note: PEP 751's ``pylock.toml`` is the eventual standardized
+# successor to this format. uv supports installing from pylock.toml
+# but that path is currently labeled experimental — switch when
+# uv graduates it.)
+config/requirements_lock.txt: config/requirements.txt
+	@command -v uv >/dev/null \
+ || (echo 'uv not found on PATH.' \
+ && echo 'Install via your package manager (brew install uv) or' \
+ && echo 'run: curl -LsSf https://astral.sh/uv/install.sh | sh' \
+ && exit 1)
+	@echo Regenerating config/requirements_lock.txt from config/requirements.txt...
+# Pass ``--python $(VENV_PYTHON)`` so the resolver always sees the
+# same interpreter as the eventual install. Without this, uv falls
+# back to whatever Python is on PATH or auto-detected from a venv
+# in cwd — which makes the lockfile contents depend on whether
+# .venv exists at compile time (libcst, e.g., declares
+# environment-marker-conditional deps that change with the
+# resolver's view of the target Python).
+	@uv pip compile --universal --generate-hashes --quiet \
+ --python $(VENV_PYTHON) \
+ config/requirements.txt -o config/requirements_lock.txt
+
+# Update our virtual environment whenever the lockfile changes,
+# Python version changes, our venv's Python symlink breaks (can
+# happen for minor Python updates), or explicit state number
+# changes. This is a dependency of env so should not itself depend
+# on env.
 #
 # Uses uv (https://docs.astral.sh/uv/) as the venv builder + package
 # installer; ~10x faster than stock pip on cold installs and gives us a
-# single-resolver story across the fleet. uv does not install pip into
-# the venv by default — anything that needs to install packages should
-# go through ``uv pip install`` rather than ``.venv/bin/pip``.
+# single-resolver story across the fleet. The install reads from
+# requirements_lock.txt with ``--require-hashes`` so uv refuses to
+# install if any byte mismatches the committed hash. uv does not
+# install pip into the venv by default — anything that needs to
+# install packages should go through ``uv pip install`` rather
+# than ``.venv/bin/pip``.
 .venv/.efro_venv_complete: \
-      config/requirements.txt \
+      config/requirements_lock.txt \
       tools/efrotools/pyver.py \
       .venv/bin/$(VENV_PYTHON) \
       .venv/.efro_venv_state_$(VENV_STATE)
@@ -1441,7 +1503,8 @@ VENV_STATE = 4
  || (echo Creating new $(VENV_PYTHON) virtual environment in \'.venv\'... \
  && rm -rf .venv && uv venv --python $(VENV_PYTHON) .venv \
  && touch .venv/.efro_venv_state_$(VENV_STATE))
-	uv pip install --python .venv/bin/$(VENV_PYTHON) -r config/requirements.txt
+	uv pip install --python .venv/bin/$(VENV_PYTHON) --require-hashes \
+ -r config/requirements_lock.txt
 	@touch .venv/.efro_venv_complete # Done last to signal fully-built venv.
 	@echo Project virtual environment for $(VENV_PYTHON) at .venv is ready to use.
 

@@ -808,11 +808,26 @@ def unchanging_hostname() -> str:
     import platform
     import subprocess
 
-    # On Mac, this should give the computer name assigned in System Prefs.
+    # On Mac, read the user-set ComputerName directly out of the
+    # SystemConfiguration plist via plutil. This is the same
+    # source-of-truth that ``scutil --get ComputerName`` reads through
+    # configd, but plutil hits the file directly so it's also
+    # resilient to sandbox restrictions on configd access (Claude
+    # Code's sandbox blocks scutil's SCDynamicStore queries, causing
+    # them to return the generic factory default "MacBook Pro").
     if platform.system() == 'Darwin':
         return (
             subprocess.run(
-                ['scutil', '--get', 'ComputerName'],
+                [
+                    'plutil',
+                    '-extract',
+                    'System.System.ComputerName',
+                    'raw',
+                    '-o',
+                    '-',
+                    '/Library/Preferences/SystemConfiguration/'
+                    'preferences.plist',
+                ],
                 check=True,
                 capture_output=True,
             )
