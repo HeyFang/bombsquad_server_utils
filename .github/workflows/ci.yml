@@ -23,6 +23,12 @@ jobs:
           using-cmake: true
       - name: Run checks
         run: BA_PCOMMANDBATCH_BUILD_REQUIRE=1 make check-ex
+      - name: Verify asset-package pins are prod
+        # Defense in depth: the upstream blessing/preflight gate
+        # in ballistica-internal also refuses non-prod pins, but
+        # re-check here so a stray dev/test pin in the public
+        # tree fails CI loudly rather than shipping.
+        run: tools/pcommand assetpins check
 
   # Compile a server binary and run some tests.
   build_and_test_linux:
@@ -36,7 +42,7 @@ jobs:
       - name: Assemble monolithic server build
         run: make cmake-server-build
       - name: Run tests
-        run: BA_PCOMMANDBATCH_BUILD_REQUIRE=1 BA_APP_RUN_BUILD_HEADLESS=1 make test-ex
+        run: BA_PCOMMANDBATCH_BUILD_REQUIRE=1 make test-ex
 
   # Test spinoff projects - versions of the project with feature-sets
   # added or removed or other changes made.

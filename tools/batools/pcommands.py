@@ -360,6 +360,48 @@ def python_apple_gather() -> None:
     _python_build_apple_mod.gather(str(pcommand.PROJROOT))
 
 
+def build_angle_apple() -> None:
+    """Build Apple ANGLE (GL-ES -> Metal) xcframeworks via vcpkg.
+
+    Stages libEGL.xcframework / libGLESv2.xcframework + headers to
+    build/angle-artifacts/ for pickup by 'make angle-apple-gather'. This is a
+    self-contained local build (clones a throwaway vcpkg; requires Xcode
+    command-line tools). Pass --include-ios to also attempt the (not yet
+    usable) iOS triplets, or --triplets=a,b to limit the build for testing.
+    """
+    import os
+    import argparse
+    from batools import buildangleapple
+
+    parser = argparse.ArgumentParser(prog='pcommand build_angle_apple')
+    parser.add_argument(
+        '--include-ios',
+        action='store_true',
+        help='Also attempt the iOS triplets (not yet usable; see module doc).',
+    )
+    parser.add_argument(
+        '--triplets',
+        help='Comma-separated overlay-triplet names to limit the build to.',
+    )
+    args = parser.parse_args(sys.argv[2:])
+
+    os.chdir(pcommand.PROJROOT)
+    buildangleapple.build(
+        str(pcommand.PROJROOT),
+        include_ios=args.include_ios,
+        triplets=args.triplets,
+    )
+
+
+def install_angle_apple_artifacts() -> None:
+    """Install staged Apple ANGLE artifacts into the source tree."""
+    import os
+    from batools import buildangleapple
+
+    os.chdir(pcommand.PROJROOT)
+    buildangleapple.gather(str(pcommand.PROJROOT))
+
+
 def python_build_android_old_debug() -> None:
     """Build embeddable Android Python lib (old pipeline, debug ver)."""
 
@@ -447,7 +489,7 @@ def efrocache_update() -> None:
     """Build & push files to efrocache for public access."""
     from efrotools.efrocache import update_cache
 
-    makefile_dirs = ['', 'src/assets', 'src/resources', 'src/meta']
+    makefile_dirs = ['', 'src/assets', 'src/resources', 'src/codegen']
     update_cache(makefile_dirs)
 
 
@@ -723,7 +765,11 @@ def efro_gradle() -> None:
     enabled_tags: set[str] = {'true'}
     target_words = [w.lower() for w in _camel_case_split(args[-1])]
     if 'google' in target_words:
-        enabled_tags = {'google', 'crashlytics'}
+        # Augment rather than replace; otherwise we lose the 'true'
+        # tag and the single-arch flavor declarations (arm/arm64/
+        # x86/x86_64, gated by ``// EFRO_IF true``) stay commented
+        # out — breaking ANDROID_MODE!=prod for google builds.
+        enabled_tags |= {'google', 'crashlytics'}
     prev_suffix = 'efro_gradle_prev'
 
     buildfilename = 'BallisticaKit/build.gradle'
@@ -818,13 +864,15 @@ def cmake_prep_dir() -> None:
 def gen_binding_code() -> None:
     """Generate a binding_foo.inc file."""
     from efro.error import CleanError
-    import batools.metabuild
+    import batools.codegenbuild
 
     if len(sys.argv) != 4:
         raise CleanError('Expected 2 args (srcfile, dstfile)')
     inpath = sys.argv[2]
     outpath = sys.argv[3]
-    batools.metabuild.gen_binding_code(str(pcommand.PROJROOT), inpath, outpath)
+    batools.codegenbuild.gen_binding_code(
+        str(pcommand.PROJROOT), inpath, outpath
+    )
 
 
 def genchangelog() -> None:
@@ -883,6 +931,28 @@ def gen_dummy_modules() -> None:
         raise CleanError(f'Expected no args; got {len(sys.argv)-2}.')
 
     generate_dummy_modules(projroot=str(pcommand.PROJROOT))
+
+
+def gen_vanilla_completions() -> None:
+    """Generate a JSON completion index for the vanilla API."""
+    from efro.error import CleanError
+    from batools.vanillacompletions import generate_vanilla_completions
+
+    if len(sys.argv) != 2:
+        raise CleanError(f'Expected no args; got {len(sys.argv) - 2}.')
+
+    generate_vanilla_completions(projroot=str(pcommand.PROJROOT))
+
+
+def gen_check_environment() -> None:
+    """Generate a standalone mypy/pylint check environment."""
+    from efro.error import CleanError
+    from batools.checkenvironment import generate_check_environment
+
+    if len(sys.argv) != 2:
+        raise CleanError(f'Expected no args; got {len(sys.argv) - 2}.')
+
+    generate_check_environment(projroot=str(pcommand.PROJROOT))
 
 
 def version() -> None:

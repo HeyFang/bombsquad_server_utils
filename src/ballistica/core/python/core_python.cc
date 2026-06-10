@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "ballistica/core/mgen/python_modules_monolithic.h"
+#include "ballistica/core/generated/python_modules_monolithic.h"
 #include "ballistica/core/platform/platform.h"
 #include "ballistica/core/python/pyembed.h"
 #include "ballistica/shared/ballistica.h"
@@ -446,14 +446,14 @@ void CorePython::DrainEarlyLogsToStderr() {
 
 void CorePython::ImportPythonObjs() {
   // Grab core Python objs we use.
-#include "ballistica/core/mgen/pyembed/binding_core.inc"
+#include "ballistica/core/generated/pyembed/binding_core.inc"
 
   // Also grab a few things we define in env.inc. Normally this sort of
   // thing would go in _hooks.py in our Python package, but because we are
   // core we don't have one, so we have to do it via inline code.
   {
     auto ctx = PythonRef(PyDict_New(), PythonRef::kSteal);
-#include "ballistica/core/mgen/pyembed/env.inc"
+#include "ballistica/core/generated/pyembed/env.inc"
     objs_.StoreCallable(ObjID::kPrependSysPathCall,
                         *ctx.DictGetItem("prepend_sys_path"));
     objs_.StoreCallable(ObjID::kWarmStart1Call,
@@ -562,7 +562,7 @@ void CorePython::VerifyPythonEnvironment() {
 void CorePython::MonolithicModeBaEnvImport() {
   assert(g_buildconfig.monolithic_build());
   assert(g_core);
-  g_core->logging->Log(LogName::kBaLifecycle, LogLevel::kInfo,
+  g_core->logging->Log(LogName::kBaLifecycle, LogLevel::kDebug,
                        "baenv.configure() begin");
 
   auto gil{Python::ScopedInterpreterLock()};
@@ -650,7 +650,7 @@ void CorePython::MonolithicModeBaEnvConfigure() {
   // captured timestamps.
   OnLogHandlerReady();
 
-  g_core->logging->Log(LogName::kBaLifecycle, LogLevel::kInfo,
+  g_core->logging->Log(LogName::kBaLifecycle, LogLevel::kDebug,
                        "baenv.configure() end");
 }
 

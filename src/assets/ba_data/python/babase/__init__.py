@@ -104,6 +104,7 @@ from _babase import (
     safecolor,
     screenmessage,
     set_analytics_screen,
+    set_app_exit_code,
     set_low_level_config_value,
     set_thread_name,
     set_main_ui_input_device,
@@ -132,6 +133,7 @@ from babase._app import App, AppState
 from babase._appcomponent import AppComponentSubsystem
 from babase._appconfig import commit_app_config
 from babase._appintent import AppIntent, AppIntentDefault, AppIntentExec
+from babase._asset_packages import loaded_asset_package_apverids
 from babase._appmode import AppMode
 from babase._appsubsystem import AppSubsystem
 from babase._appmodeselector import AppModeSelector
@@ -151,6 +153,7 @@ from babase._devconsole import (
     DevConsoleTabEntry,
 )
 from babase._emptyappmode import EmptyAppMode
+from babase._constructmode import ConstructAppMode
 from babase._error import (
     ActivityNotFoundError,
     ActorNotFoundError,
@@ -189,13 +192,14 @@ from babase._locale import LocaleSubsystem
 from babase._logging import (
     accountlog,
     applog,
+    assetmanagerlog,
     balog,
     lifecyclelog,
     netlog,
     uilog,
 )
 from babase._login import LoginAdapter, LoginInfo, discord_sign_in
-from babase._mgen.enums import (
+from babase._generated.enums import (
     InputType,
     Permission,
     QuitType,
@@ -204,6 +208,13 @@ from babase._mgen.enums import (
 )
 from babase._math import normalized_color, is_point_in_box, vec3validate
 from babase._meta import MetadataSubsystem
+from babase._assetsubsystem import (
+    AssetSubsystem,
+    ResolveResult,
+    ResolveProgress,
+    ResolvePhase,
+    AssetResolveError,
+)
 from babase._env import DEFAULT_REQUEST_TIMEOUT_SECONDS
 from babase._net import get_ip_address_type, NetworkSubsystem
 from babase._plugin import PluginSpec, Plugin, PluginSubsystem
@@ -211,7 +222,11 @@ from babase._stringedit import StringEditAdapter, StringEditSubsystem
 from babase._text import timestring
 from babase._workspace import WorkspaceSubsystem
 
-_babase.app = app = App()
+#: The :class:`~babase.App` singleton for the current process. Also
+#: exposed at ``bauiv1.app``, ``bascenev1.app``, etc. — they all
+#: refer to this same object.
+app = App()
+_babase.app = app
 
 __all__ = [
     'accountlog',
@@ -244,6 +259,9 @@ __all__ = [
     'apptimer',
     'AppTimer',
     'asset_loads_allowed',
+    'assetmanagerlog',
+    'AssetSubsystem',
+    'AssetResolveError',
     'atexit',
     'balog',
     'Call',
@@ -276,6 +294,7 @@ __all__ = [
     'DisplayTimer',
     'discord_sign_in',
     'do_once',
+    'ConstructAppMode',
     'EmptyAppMode',
     'env',
     'Env',
@@ -317,6 +336,7 @@ __all__ = [
     'is_point_in_box',
     'is_xcode_build',
     'LanguageSubsystem',
+    'loaded_asset_package_apverids',
     'LocaleSubsystem',
     'lifecyclelog',
     'lock_all_input',
@@ -362,12 +382,16 @@ __all__ = [
     'reload_hooks',
     'reload_media',
     'request_permission',
+    'ResolveResult',
+    'ResolveProgress',
+    'ResolvePhase',
     'safecolor',
     'screenmessage',
     'SessionNotFoundError',
     'SessionPlayerNotFoundError',
     'SessionTeamNotFoundError',
     'set_analytics_screen',
+    'set_app_exit_code',
     'set_low_level_config_value',
     'set_main_ui_input_device',
     'set_thread_name',

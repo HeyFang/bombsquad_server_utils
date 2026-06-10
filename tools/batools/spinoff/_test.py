@@ -118,6 +118,22 @@ def spinoff_test(args: list[str]) -> None:
                     shell=True,
                     check=True,
                 )
+                # Defensive: nuke leftover config/ in the submodule
+                # if it exists. The dir was renamed config/ → pconfig/
+                # on 2026-05-12 across all repos. Leftover gitignored
+                # files in the old config/ on long-lived Jenkins
+                # workspaces show up as untracked after the pull,
+                # and spinoff requires the src to have no untracked
+                # files. Safe to drop once every workspace has cycled
+                # past it.
+                stale_config = os.path.join(submpath, 'config')
+                if os.path.isdir(stale_config):
+                    print(
+                        f'{Clr.BLU}Removing pre-rename submodule config/'
+                        f" at '{stale_config}'...{Clr.RST}",
+                        flush=True,
+                    )
+                    subprocess.run(['rm', '-rf', stale_config], check=True)
         else:
             # No spinoff project there yet; create it.
             cmd = [
@@ -147,13 +163,7 @@ def spinoff_test(args: list[str]) -> None:
         # then check the assembled set of Python scripts. If all that
         # goes through it tells us that this spinoff project is at least
         # basically functional.
-
-        env: dict[str, str] = os.environ.copy()
-        env.update(
-            BA_APP_RUN_ENABLE_BUILDS='1',
-            BA_APP_RUN_BUILD_HEADLESS='1',
-        )
-        subprocess.run(['make', 'mypy'], cwd=path, env=env, check=True)
+        subprocess.run(['make', 'mypy'], cwd=path, check=True)
 
         # Run the binary with a --help arg and make sure it spits
         # out what we expect it to.

@@ -22,6 +22,7 @@ from efrotools.pcommands import (
     efrosync,
     formatcode,
     formatscripts,
+    format_files,
     formatmakefile,
     cpplint,
     pylint,
@@ -88,6 +89,8 @@ from batools.pcommands import (
     python_android_gather,
     python_build_apple,
     python_apple_gather,
+    build_angle_apple,
+    install_angle_apple_artifacts,
     python_android_patch_old,
     python_android_patch_ssl_old,
     python_gather,
@@ -117,9 +120,12 @@ from batools.pcommands import (
     logcat,
     gen_python_enums_module,
     gen_dummy_modules,
+    gen_vanilla_completions,
+    gen_check_environment,
     version,
 )
 from batools.pcommands2 import (
+    gen_builtin_asset_ids,
     gen_python_init_module,
     gen_monolithic_register_modules,
     py_examine,
@@ -134,8 +140,8 @@ from batools.pcommands2 import (
     wsl_path_to_win,
     wsl_build_check_win_drive,
     get_modern_make,
-    asset_package_resolve,
-    asset_package_assemble,
+    assetpins,
+    asset_bundle_build,
     cst_test,
 )
 from batools.pcommands3 import (

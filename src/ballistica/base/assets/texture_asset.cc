@@ -18,10 +18,12 @@
 #include "ballistica/base/graphics/text/text_packer.h"
 #include "ballistica/base/graphics/texture/dds.h"
 #include "ballistica/base/graphics/texture/ktx.h"
+#include "ballistica/base/graphics/texture/ktx2.h"
 #include "ballistica/base/graphics/texture/pvr.h"
 #include "ballistica/core/core.h"
 #include "ballistica/core/logging/logging.h"
 #include "ballistica/core/platform/platform.h"
+#include "ballistica/shared/generic/utils.h"
 #include "external/qr_code_generator/QrCode.hpp"
 
 namespace ballistica::base {
@@ -62,6 +64,19 @@ TextureAsset::TextureAsset(const std::string& file_in, TextureType type_in,
     : file_name_(file_in), type_(type_in), min_quality_(min_quality_in) {
   file_name_full_ =
       g_base->assets->FindAssetFile(Assets::FileType::kTexture, file_in);
+  // CAS-form ref (``<apverid>:<asset_name>``) resolves to a CAS blob
+  // whose on-disk name is just a hash — no extension. Set an
+  // explicit container hint so the loader can dispatch without
+  // sniffing the path. Hardcoded to ``.ktx2`` (FALLBACK_V1 produces
+  // KTX2 per initiative decision #12); Phase 3 construct-mode
+  // replaces this with per-profile dispatch. Headless mode resolves
+  // to a ``.nop`` dummy path which has its own loader branch, so
+  // we leave the container empty in that case and let the matcher's
+  // path-suffix fallback pick the right branch.
+  if (file_in.find(':') != std::string::npos
+      && !file_name_full_.ends_with(".nop")) {
+    container_ = ".ktx2";
+  }
   valid_ = true;
 }
 
@@ -104,6 +119,28 @@ auto TextureAsset::GetName() const -> std::string {
 
 auto TextureAsset::GetNameFull() const -> std::string {
   return file_name_full();
+}
+
+auto TextureAsset::ReResolveSource() -> bool {
+  // Only file-backed CAS textures (qualified ``<apverid>:<name>`` refs) can
+  // change their underlying blob when the asset-package registry is
+  // re-resolved. Text-textures and QR codes are generated in-engine, and
+  // legacy bare-filename textures resolve to a fixed on-disk path.
+  if (packer_.exists() || is_qr_code_
+      || file_name_.find(':') == std::string::npos) {
+    return false;
+  }
+  auto new_full =
+      g_base->assets->FindAssetFile(Assets::FileType::kTexture, file_name_);
+  if (new_full == file_name_full_) {
+    return false;
+  }
+  file_name_full_ = new_full;
+  // Re-derive the container hint exactly as the constructor does: CAS blobs
+  // are extensionless KTX2; the headless ``.nop`` dummy keeps it empty so the
+  // matcher's path-suffix fallback picks the right branch.
+  container_ = file_name_full_.ends_with(".nop") ? "" : ".ktx2";
+  return true;
 }
 
 void TextureAsset::DoPreload() {
@@ -226,10 +263,30 @@ void TextureAsset::DoPreload() {
       int file_name_size = static_cast<int>(file_name_full_.size());
       BA_PRECONDITION(file_name_size > 4);
 
-      // Etc1 or dxt3 for non-alpha and dxt5 for alpha (.android_dds files).
-      if (file_name_size > 12
-          && !strcmp(file_name_full_.c_str() + file_name_size - 12,
-                     ".android_dds")) {
+      // Dispatch on explicit ``container_`` when set (CAS-resolved
+      // assets), else fall back to the legacy path-suffix sniff.
+      auto matches = [this, file_name_size](const char* suffix) -> bool {
+        if (!container_.empty()) {
+          return container_ == suffix;
+        }
+        auto slen = static_cast<int>(strlen(suffix));
+        return file_name_size > slen
+               && !strcmp(file_name_full_.c_str() + file_name_size - slen,
+                          suffix);
+      };
+
+      // Uncompressed RGBA8 + mipmaps (KTX 2.0, ``.ktx2`` files).
+      // Used by the asset-package CAS pipeline for FALLBACK_V1.
+      if (matches(".ktx2")) {
+        // Asset-package textures load full mips from the flavor; they do
+        // not consult the legacy texture-quality knob (see LoadKTX2).
+        LoadKTX2(file_name_full_, preload_datas_[0].buffers,
+                 preload_datas_[0].widths, preload_datas_[0].heights,
+                 preload_datas_[0].formats, preload_datas_[0].sizes,
+                 &preload_datas_[0].base_level,
+                 &preload_datas_[0].premultiplied);
+      } else if (matches(".android_dds")) {
+        // Etc1 or dxt3 for non-alpha and dxt5 for alpha (.android_dds).
         LoadDDS(file_name_full_, preload_datas_[0].buffers,
                 preload_datas_[0].widths, preload_datas_[0].heights,
                 preload_datas_[0].formats, preload_datas_[0].sizes,
@@ -252,8 +309,7 @@ void TextureAsset::DoPreload() {
             preload_datas_[0].ConvertToUncompressed(this);
           }
         }
-      } else if (!strcmp(file_name_full_.c_str() + file_name_size - 4,
-                         ".dds")) {
+      } else if (matches(".dds")) {
         // Dxt1 for non-alpha and dxt5 for alpha (.dds files).
         LoadDDS(file_name_full_, preload_datas_[0].buffers,
                 preload_datas_[0].widths, preload_datas_[0].heights,
@@ -268,8 +324,7 @@ void TextureAsset::DoPreload() {
                         TextureCompressionType::kS3TC)) {
           preload_datas_[0].ConvertToUncompressed(this);
         }
-      } else if (!strcmp(file_name_full_.c_str() + file_name_size - 4,
-                         ".ktx")) {
+      } else if (matches(".ktx")) {
         // Etc2 or etc1 for non-alpha and etc2 for alpha (.ktx files).
         try {
           LoadKTX(file_name_full_, preload_datas_[0].buffers,
@@ -302,8 +357,7 @@ void TextureAsset::DoPreload() {
           preload_datas_[0].ConvertToUncompressed(this);
         }
 
-      } else if (!strcmp(file_name_full_.c_str() + file_name_size - 4,
-                         ".pvr")) {
+      } else if (matches(".pvr")) {
         // Pvr for all (.pvr files).
         LoadPVR(file_name_full_, preload_datas_[0].buffers,
                 preload_datas_[0].widths, preload_datas_[0].heights,
@@ -315,8 +369,7 @@ void TextureAsset::DoPreload() {
         assert(
             g_base->graphics->placeholder_client_context()
                 ->SupportsTextureCompressionType(TextureCompressionType::kPVR));
-      } else if (!strcmp(file_name_full_.c_str() + file_name_size - 4,
-                         ".nop")) {
+      } else if (matches(".nop")) {
         // Dummy path for headless; nothing to do here.
       } else {
         throw Exception("Invalid texture file name: '" + file_name_full_ + "'");
@@ -467,6 +520,11 @@ void TextureAsset::DoLoad() {
   assert(!preload_datas_.empty());
   base_level_ = preload_datas_[0].base_level;
 
+  // Carry the premultiplied-alpha flag onto the persistent asset for
+  // draw-time premult-blend selection (decision #23); the preload data is
+  // about to be cleared. Re-read on every (re)load, like base_level_.
+  premultiplied_ = preload_datas_[0].premultiplied;
+
   // If we're done, kill our preload data.
   preload_datas_.clear();
 }
@@ -477,6 +535,7 @@ void TextureAsset::DoUnload() {
   assert(renderer_data_.exists());
   renderer_data_.Clear();
   base_level_ = 0;
+  premultiplied_ = false;
 }
 
 }  // namespace ballistica::base

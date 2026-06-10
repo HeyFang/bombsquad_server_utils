@@ -55,7 +55,10 @@ class IOExtendedData:
         """Called before data is sent to an outputter.
 
         Can be overridden to validate or filter data before
-        sending it on its way.
+        sending it on its way. Fires on every dataclass instance in
+        the object graph (not just the top level), in top-down order.
+        Mutations made here are visible to the caller after output,
+        since this runs on the caller's own instance.
         """
 
     @classmethod
@@ -63,13 +66,19 @@ class IOExtendedData:
         """Called on data before a class instance is created from it.
 
         Can be overridden to migrate old data formats to new, etc.
+        Fires on every dataclass-shaped dict in the input (not just
+        the top level), in top-down order. Mutations to ``data`` are
+        applied in place and are visible to the caller.
         """
 
     def did_input(self) -> None:
         """Called on a class instance after created from data.
 
         Can be useful to correct values from the db, etc. in the
-        type-safe form.
+        type-safe form. Fires on every dataclass instance in the
+        object graph (not just the top level), in bottom-up order
+        (children are fully constructed and have had their own
+        ``did_input`` called before their parent's runs).
         """
 
     # pylint: disable=useless-return
@@ -317,6 +326,22 @@ class IOAttrs:
     #: Does not actually affect value input/output.
     text_literal: bool | None = None
 
+    #: If provided for a string field, supplies placeholder/hint text
+    #: shown in the input when its value is empty. Can be referenced
+    #: when creating UI for editing the value. Does not actually affect
+    #: value input/output.
+    placeholder: str | None = None
+
+    #: If provided for a string field, caps the maximum length of the
+    #: value at the form/UI layer. This is a *form-only* hint — it is
+    #: NOT enforced by dataclassio at serialization (read or write)
+    #: time. Form builders (e.g. ``FormDataclass``) read this to emit
+    #: an HTML ``maxlength`` attribute and reject oversize submissions
+    #: server-side. Existing in-DB data exceeding the cap continues to
+    #: deserialize normally. Only meaningful for ``str`` fields; ignored
+    #: for sequence/collection types.
+    max_length: int | None = None
+
     def __init__(  # pylint: disable=too-many-branches
         self,
         storagename: str | None = storagename,
@@ -334,6 +359,8 @@ class IOAttrs:
         multiline: bool | None = None,
         edit_as_options: bool | None = None,
         text_literal: bool | None = None,
+        placeholder: str | None = None,
+        max_length: int | None = None,
     ):
 
         # Only store values that differ from class defaults to keep
@@ -385,6 +412,10 @@ class IOAttrs:
             self.edit_as_options = edit_as_options
         if text_literal is not cls.text_literal:
             self.text_literal = text_literal
+        if placeholder is not cls.placeholder:
+            self.placeholder = placeholder
+        if max_length is not cls.max_length:
+            self.max_length = max_length
 
     def validate_for_field(self, cls: type, field: dataclasses.Field) -> None:
         """Ensure the IOAttrs is ok to use with provided field."""

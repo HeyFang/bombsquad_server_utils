@@ -23,6 +23,7 @@
 #include "ballistica/base/python/support/python_context_call.h"
 #include "ballistica/base/ui/ui.h"
 #include "ballistica/core/platform/platform.h"
+#include "ballistica/shared/foundation/input_types.h"
 #include "ballistica/shared/generic/utils.h"
 #include "ballistica/shared/python/python.h"
 #include "ballistica/ui_v1/python/ui_v1_python.h"
@@ -226,20 +227,22 @@ void TextWidget::Draw(base::RenderPass* pass, bool draw_transparent) {
         c.SetTransparent(true);
         c.SetPremultiplied(true);
         c.SetColor(0.25f * m, 0.3f * m, 0, 0.3f * m);
-        c.SetTexture(g_base->assets->SysTexture(base::SysTextureID::kGlow));
+        c.SetTexture(g_base->assets->BuiltinTextureOld(
+            base::BuiltinTextureOldID::kGlow));
         {
           auto xf = c.ScopedTransform();
           c.Translate(highlight_center_x_, highlight_center_y_, 0.1f);
           c.Scale(highlight_width_, highlight_height_);
-          c.DrawMeshAsset(g_base->assets->SysMesh(base::SysMeshID::kImage4x1));
+          c.DrawMeshAsset(g_base->assets->BuiltinMeshOld(
+              base::BuiltinMeshOldID::kImage1x1));
         }
       } else {
         assert(glow_type_ == GlowType::kUniform);
         base::SimpleComponent c(pass);
         c.SetTransparent(true);
         c.SetColor(0.9 * m, 1.0f * m, 0, 0.3f * m);
-        c.SetTexture(
-            g_base->assets->SysTexture(base::SysTextureID::kShadowSharp));
+        c.SetTexture(g_base->assets->BuiltinTextureOld(
+            base::BuiltinTextureOldID::kShadowSharp));
         {
           auto xf = c.ScopedTransform();
           c.Translate(bound_l, bound_b, 0.1f);
@@ -264,13 +267,14 @@ void TextWidget::Draw(base::RenderPass* pass, bool draw_transparent) {
       base::SimpleComponent c(pass);
       c.SetTransparent(true);
       c.SetColor(1, 1, 1, 1);
-      c.SetTexture(g_base->assets->SysTexture(base::SysTextureID::kUIAtlas));
+      c.SetTexture(g_base->assets->BuiltinTextureOld(
+          base::BuiltinTextureOldID::kUIAtlas));
       {
         auto xf = c.ScopedTransform();
         c.Translate(outline_center_x_, outline_center_y_, 0.1f);
         c.Scale(outline_width_, outline_height_);
-        c.DrawMeshAsset(
-            g_base->assets->SysMesh(base::SysMeshID::kTextBoxTransparent));
+        c.DrawMeshAsset(g_base->assets->BuiltinMeshOld(
+            base::BuiltinMeshOldID::kTextBoxTransparent));
       }
       c.Submit();
     }
@@ -286,8 +290,8 @@ void TextWidget::Draw(base::RenderPass* pass, bool draw_transparent) {
       } else {
         c.SetColor(0.5f, 0.5f, 0.5f, 1);
       }
-      c.SetTexture(
-          g_base->assets->SysTexture(base::SysTextureID::kTextClearButton));
+      c.SetTexture(g_base->assets->BuiltinTextureOld(
+          base::BuiltinTextureOldID::kTextClearButton));
       {
         auto xf = c.ScopedTransform();
         c.Translate(r - 20, b * 0.5f + t * 0.5f, 0.1f);
@@ -296,7 +300,8 @@ void TextWidget::Draw(base::RenderPass* pass, bool draw_transparent) {
         } else {
           c.Scale(25, 25);
         }
-        c.DrawMeshAsset(g_base->assets->SysMesh(base::SysMeshID::kImage1x1));
+        c.DrawMeshAsset(
+            g_base->assets->BuiltinMeshOld(base::BuiltinMeshOldID::kImage1x1));
       }
       c.Submit();
     }
@@ -507,10 +512,12 @@ void TextWidget::DoDrawCarat_(base::RenderPass* pass,
         c.Scale(max_width_height_scale, max_width_height_scale);
         c.Translate(h + 4, v + 17.0f);
         c.Scale(6, 27);
-        c.DrawMeshAsset(g_base->assets->SysMesh(base::SysMeshID::kImage1x1));
+        c.DrawMeshAsset(
+            g_base->assets->BuiltinMeshOld(base::BuiltinMeshOldID::kImage1x1));
         c.SetColor(1, 1, 1, 0);
         c.Scale(0.3f, 0.8f);
-        c.DrawMeshAsset(g_base->assets->SysMesh(base::SysMeshID::kImage1x1));
+        c.DrawMeshAsset(
+            g_base->assets->BuiltinMeshOld(base::BuiltinMeshOldID::kImage1x1));
       }
       c.Submit();
     }
@@ -730,17 +737,18 @@ auto TextWidget::HandleMessage(const base::WidgetMessage& m) -> bool {
     text_group_dirty_ = true;
     bool claimed = false;
     switch (m.keysym.sym) {
-      case SDLK_UP:
-      case SDLK_DOWN:
-      case SDLK_TAB:
+      case BAK_UP:
+      case BAK_DOWN:
+      case BAK_TAB:
         // never claim up/down/tab
         return false;
-      case SDLK_RETURN:
-      case SDLK_KP_ENTER:
+      case BAK_RETURN:
+      case BAK_KP_ENTER:
         if (g_buildconfig.platform_ios_tvos()
             || g_buildconfig.platform_android()) {
           // On mobile, return currently just deselects us.
-          g_base->audio->SafePlaySysSound(base::SysSoundID::kSwish);
+          g_base->audio->SafePlayBuiltinSoundOld(
+              base::BuiltinSoundOldID::kSwish);
           parent_widget()->SelectWidget(nullptr);
           return true;
         } else {
@@ -751,7 +759,7 @@ auto TextWidget::HandleMessage(const base::WidgetMessage& m) -> bool {
           }
         }
         break;
-      case SDLK_LEFT:
+      case BAK_LEFT:
         if (editable()) {
           claimed = true;
           if (carat_position_ > 0) {
@@ -759,14 +767,14 @@ auto TextWidget::HandleMessage(const base::WidgetMessage& m) -> bool {
           }
         }
         break;
-      case SDLK_RIGHT:
+      case BAK_RIGHT:
         if (editable()) {
           claimed = true;
           carat_position_++;
         }
         break;
-      case SDLK_BACKSPACE:
-      case SDLK_DELETE:
+      case BAK_BACKSPACE:
+      case BAK_DELETE:
         if (editable()) {
           claimed = true;
           std::vector<uint32_t> unichars =
@@ -876,7 +884,8 @@ auto TextWidget::HandleMessage(const base::WidgetMessage& m) -> bool {
           pressed_activate_ =
               (click_count == 2 || click_activate_) && !editable_;
           if (click_count == 1) {
-            g_base->audio->SafePlaySysSound(base::SysSoundID::kTap);
+            g_base->audio->SafePlayBuiltinSoundOld(
+                base::BuiltinSoundOldID::kTap);
           }
         }
         return true;
@@ -902,7 +911,7 @@ auto TextWidget::HandleMessage(const base::WidgetMessage& m) -> bool {
           text_translation_dirty_ = true;
           carat_position_ = 0;
           text_group_dirty_ = true;
-          g_base->audio->SafePlaySysSound(base::SysSoundID::kTap);
+          g_base->audio->SafePlayBuiltinSoundOld(base::BuiltinSoundOldID::kTap);
         }
 
         return true;

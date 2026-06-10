@@ -68,7 +68,7 @@ _BROKEN_RECONNECT_HOST = '127.0.0.1:1'
 
 
 def consume_via_ws(
-    response: ResponseData, *, bearer: str | None
+    response: ResponseData, *, bearer: str | None, host: str
 ) -> ResponseData:
     """Drain a stream over WebSocket and return a terminal-only response.
 
@@ -77,12 +77,18 @@ def consume_via_ws(
     falls through to the usual terminal handling
     (message/error/end_command).
 
+    ``host`` is the bacloud client's resolved kickoff hostname
+    (the basn the kickoff went to); used to construct the WS URL
+    when the producer didn't pin one.
+
     Caller must check ``response.stream_ws is not None`` first.
     Raises :class:`~efro.error.CleanError` on unrecoverable WS
     failure (token-bad, reconnect-budget exhausted, etc.).
     """
     assert response.stream_ws is not None
-    terminal = asyncio.run(_consume_with_reconnect(response.stream_ws, bearer))
+    terminal = asyncio.run(
+        _consume_with_reconnect(response.stream_ws, bearer, host)
+    )
     return ResponseData(stream_frames=[terminal])
 
 
@@ -106,13 +112,13 @@ def _force_drop_after_seconds() -> float | None:
         return None
 
 
-def _refresh_url_for(basn_url: str) -> str:
+def _refresh_url_for(ws_url: str) -> str:
     """Compute the refresh-token endpoint URL from the WS URL."""
-    https = basn_url.replace('wss://', 'https://').replace('ws://', 'http://')
+    https = ws_url.replace('wss://', 'https://').replace('ws://', 'http://')
     return f'{https}/refresh-token'
 
 
-def _ws_url_for_reconnect(basn_url: str) -> str:
+def _ws_url_for_reconnect(ws_url: str) -> str:
     """Apply the ``BACLOUD_TEST_BREAK_RECONNECT`` hook if set."""
     if os.environ.get('BACLOUD_TEST_BREAK_RECONNECT') == '1':
         # Strip the host but preserve the path. The path includes
@@ -120,18 +126,37 @@ def _ws_url_for_reconnect(basn_url: str) -> str:
         # to a definitely-unreachable host on that path.
         from urllib.parse import urlparse, urlunparse
 
-        parsed = urlparse(basn_url)
+        parsed = urlparse(ws_url)
         return urlunparse(parsed._replace(netloc=_BROKEN_RECONNECT_HOST))
-    return basn_url
+    return ws_url
+
+
+def _resolve_ws_url(sw: 'StreamWS', host: str) -> str:
+    """Determine the WS URL the client should connect to.
+
+    When ``sw.basn_url`` is set the producer pinned the stream to
+    a specific basn (Phase 3 case); we honor that. Otherwise we
+    construct the URL from the bacloud client's own kickoff host,
+    so the LB routes us to a healthy basn anywhere in the fleet.
+    """
+    if sw.basn_url is not None:
+        return sw.basn_url
+    return f'wss://{host}/streamcall/{sw.call_id}'
 
 
 async def _consume_with_reconnect(
-    sw: StreamWS, bearer: str | None
+    sw: StreamWS, bearer: str | None, host: str
 ) -> StreamFinal:
     """Open the WS (with reconnect on transient failure)."""
     import websockets
 
-    current_token = sw.ws_token
+    # The ws_token field is now a securedata.Archive nested in the
+    # response. We pass it on the WS handshake as an HTTP header
+    # value, which means we encode it as base64-of-canonical-JSON
+    # — HTTP headers don't carry raw JSON cleanly, and basn does
+    # the inverse decode on receipt.
+    current_token = _encode_archive_for_header(sw.ws_token)
+    base_ws_url = _resolve_ws_url(sw, host)
     deadline = time.monotonic() + _reconnect_budget_seconds()
     backoff = _RECONNECT_BACKOFF_MIN
     is_first_connection = True
@@ -142,9 +167,9 @@ async def _consume_with_reconnect(
 
     while True:
         url = (
-            sw.basn_url
+            base_ws_url
             if is_first_connection
-            else _ws_url_for_reconnect(sw.basn_url)
+            else _ws_url_for_reconnect(base_ws_url)
         )
         try:
             terminal = await _consume_once(
@@ -157,7 +182,7 @@ async def _consume_with_reconnect(
         except _NeedsTokenRefresh:
             try:
                 current_token = await _refresh_token(
-                    sw.basn_url, current_token, bearer
+                    base_ws_url, current_token, bearer
                 )
             except _RefreshFailed as exc:
                 raise CleanError(
@@ -306,6 +331,24 @@ async def _refresh_token(
         return str(data['ws_token'])
     except (ValueError, KeyError) as exc:
         raise _RefreshFailed(f'unparseable response: {body!r}') from exc
+
+
+def _encode_archive_for_header(archive: object) -> str:
+    """Encode a :class:`bacommon.securedata.Archive` for an HTTP
+    header.
+
+    Header value is base64-of-canonical-JSON. basn's
+    :func:`_decode_token_header` is the inverse.
+    """
+    import base64
+
+    from efro.dataclassio import dataclass_to_json
+
+    return (
+        base64.urlsafe_b64encode(dataclass_to_json(archive).encode())
+        .rstrip(b'=')
+        .decode('ascii')
+    )
 
 
 def _http_post(req: urllib.request.Request) -> bytes:

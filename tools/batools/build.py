@@ -123,17 +123,19 @@ class LazyBuildCategory(Enum):
 
     RESOURCES = 'resources_src'
     ASSETS = 'assets_src'
-    META = 'meta_src'
+    CODEGEN = 'codegen_src'
     CMAKE = 'cmake_src'
     WIN = 'win_src'
     DUMMYMODULES = 'dummymodules_src'
+    VANILLA_COMPLETIONS = 'vanilla_completions_src'
+    CHECK_ENVIRONMENT = 'check_environment_src'
 
 
 def lazybuild(target: str, category: LazyBuildCategory, command: str) -> None:
     """Run some lazybuild presets."""
 
-    # Meta builds.
-    if category is LazyBuildCategory.META:
+    # Codegen builds.
+    if category is LazyBuildCategory.CODEGEN:
         LazyBuildContext(
             target=target,
             command=command,
@@ -141,17 +143,17 @@ def lazybuild(target: str, category: LazyBuildCategory, command: str) -> None:
             # away, its not safe to have multiple builds going with it
             # at once.
             buildlockname=category.value,
-            # Regular paths; changes to these will trigger meta build.
+            # Regular paths; changes to these will trigger codegen build.
             srcpaths=[
                 'Makefile',
-                'src/meta',
+                'src/codegen',
                 'src/ballistica/shared/ballistica.h',
                 '.efrocachemap',
             ],
-            # Our meta Makefile targets generally don't list tools
+            # Our codegen Makefile targets generally don't list tools
             # scripts that can affect their creation as sources, so
             # let's set up a catch-all here: when any of our tools stuff
-            # changes we'll blow away all existing meta builds.
+            # changes we'll blow away all existing codegen builds.
             #
             # Update: also including featureset-defs here; any time
             # we're mucking with those it's good to start things fresh
@@ -161,13 +163,13 @@ def lazybuild(target: str, category: LazyBuildCategory, command: str) -> None:
                 'tools/efrotoolsinternal',
                 'tools/batools',
                 'tools/batoolsinternal',
-                'config/featuresets',
+                'pconfig/featuresets',
             ],
             # Maintain a hash of all srcpaths and do a full-clean
             # whenever that changes. Takes care of orphaned files if a
             # featureset is removed/etc.
             manifest_file=f'.cache/lazybuild/manifest_{category.value}',
-            command_fullclean='make meta-clean',
+            command_fullclean='make codegen-clean',
         ).run()
 
     # CMake builds.
@@ -188,7 +190,8 @@ def lazybuild(target: str, category: LazyBuildCategory, command: str) -> None:
             ],
             dirfilter=(
                 lambda root, dirname: not (
-                    root == 'src' and dirname in {'meta', 'tools', 'external'}
+                    root == 'src'
+                    and dirname in {'codegen', 'tools', 'external'}
                 )
             ),
             command=command,
@@ -198,7 +201,7 @@ def lazybuild(target: str, category: LazyBuildCategory, command: str) -> None:
     elif category is LazyBuildCategory.WIN:
 
         def _win_dirfilter(root: str, dirname: str) -> bool:
-            if root == 'src' and dirname in {'meta', 'tools'}:
+            if root == 'src' and dirname in {'codegen', 'tools'}:
                 return False
             if root == 'src/external' and dirname != 'windows':
                 return False
@@ -257,17 +260,23 @@ def lazybuild(target: str, category: LazyBuildCategory, command: str) -> None:
                 'tools',
                 'src/assets',
                 '.efrocachemap',
-                # Needed to rebuild on asset-package changes.
-                'config/projectconfig.json',
-            ],
-            # This file won't exist if we are using a dev asset-package,
-            # in which case we want to always run so we can ask the
-            # server for package updates each time.
-            srcpaths_exist=[
-                '.cache/asset_package_resolved',
+                # Needed to rebuild on asset-bundle apversion
+                # changes ("assets" field). projectconfig is the
+                # single source of truth post-migration; any
+                # change here flows through to bundle-manifest
+                # rules that depend on it directly.
+                'pconfig/projectconfig.json',
             ],
             command=command,
             filefilter=_filefilter,
+            # Force a rebuild when re-fetching bundled assets: a
+            # server-side recipe/pipeline-version bump changes the built
+            # output without touching any local input the source-hashing
+            # sees, so without this the whole assets sub-build is skipped
+            # before the Makefile bundle rule (and asset_bundle_build's own
+            # early-out, also keyed on this var) ever run. See the
+            # BA_ASSET_BUNDLE_FORCE_REFETCH note in the /baclient skill.
+            force=os.environ.get('BA_ASSET_BUNDLE_FORCE_REFETCH') == '1',
         )
 
         # TEMP HACK - rebuild with any src-master assets change on my
@@ -301,7 +310,7 @@ def lazybuild(target: str, category: LazyBuildCategory, command: str) -> None:
             # definitely want to restrict to one at a time.
             buildlockname=category.value,
             srcpaths=[
-                'config/featuresets',
+                'pconfig/featuresets',
                 'tools/batools/dummymodule.py',
                 'src/ballistica',
                 '.efrocachemap',
@@ -313,6 +322,39 @@ def lazybuild(target: str, category: LazyBuildCategory, command: str) -> None:
             # featureset is removed/etc.
             manifest_file=f'.cache/lazybuild/manifest_{category.value}',
             command_fullclean='make dummymodules-clean',
+        ).run()
+
+    # Vanilla completions: introspect the runtime Python tree against
+    # the dummy modules and dump a JSON completion index. Inputs are
+    # the runtime Python sources plus the generator script; the
+    # dummymodules dep handled at Make level since DUMMYMODULES has
+    # its own srcpath set.
+    elif category is LazyBuildCategory.VANILLA_COMPLETIONS:
+        LazyBuildContext(
+            target=target,
+            buildlockname=category.value,
+            srcpaths=[
+                'src/assets/ba_data/python',
+                'tools/batools/vanillacompletions.py',
+            ],
+            command=command,
+        ).run()
+
+    elif category is LazyBuildCategory.CHECK_ENVIRONMENT:
+        LazyBuildContext(
+            target=target,
+            buildlockname=category.value,
+            srcpaths=[
+                'src/assets/ba_data/python',
+                'build/dummymodules',
+                'tools/efro',
+                'tools/efrotools',
+                'tools/bacommon',
+                'tools/batools/checkenvironment.py',
+                'pconfig/toolconfigsrc/mypy.ini',
+                'pconfig/toolconfigsrc/pylintrc',
+            ],
+            command=command,
         ).run()
 
     else:
