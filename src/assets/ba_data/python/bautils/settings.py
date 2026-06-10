@@ -15,7 +15,7 @@ enableStatsLog: bool = True
 hostName = "Cyklons"
 
 # ---- PASSWORD AUTH SETTINGS ----
-enablePasswordAuth: bool = True
+enablePasswordAuth: bool = False
 adminPassword = 'dumbledore'
 
 # ---- IP AUTH SETTINGS ----
