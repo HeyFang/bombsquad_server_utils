@@ -7,6 +7,7 @@
 #include "ballistica/base/assets/assets.h"
 #include "ballistica/base/graphics/component/simple_component.h"
 #include "ballistica/base/graphics/mesh/mesh_indexed_simple_full.h"
+#include "ballistica/base/input/input.h"
 #include "ballistica/base/logic/logic.h"
 
 namespace ballistica::ui_v1 {
@@ -27,8 +28,8 @@ void ImageWidget::Draw(base::RenderPass* pass, bool draw_transparent) {
 
   millisecs_t current_time = pass->frame_def()->display_time_millisecs();
 
-  Vector3f tilt = tilt_scale_ * 0.01f * g_base->graphics->tilt();
-  if (draw_control_parent()) tilt += 0.02f * g_base->graphics->tilt();
+  Vector3f tilt = tilt_scale_ * 0.01f * g_base->input->tilt();
+  if (draw_control_parent()) tilt += 0.02f * g_base->input->tilt();
   float extra_offs_x = -tilt.y;
   float extra_offs_y = tilt.x;
 
@@ -84,15 +85,15 @@ void ImageWidget::Draw(base::RenderPass* pass, bool draw_transparent) {
           if (radial_amount_ < 1.0f) {
             draw_radial_transparent = true;
           } else {
-            mesh_transparent_used = g_base->assets->BuiltinMeshOld(
-                base::BuiltinMeshOldID::kImage1x1);
+            mesh_transparent_used = g_base->assets->BuiltinMesh(
+                base::BuiltinMeshID::kMeshesImage1x1);
           }
         } else {
           if (radial_amount_ < 1.0f) {
             draw_radial_opaque = true;
           } else {
-            mesh_opaque_used = g_base->assets->BuiltinMeshOld(
-                base::BuiltinMeshOldID::kImage1x1);
+            mesh_opaque_used = g_base->assets->BuiltinMesh(
+                base::BuiltinMeshID::kMeshesImage1x1);
           }
         }
       }
@@ -104,6 +105,13 @@ void ImageWidget::Draw(base::RenderPass* pass, bool draw_transparent) {
                * draw_controller->GetDrawBrightness(current_time))
               + (1.0f - draw_controller_mult_) * 1.0f;
       }
+
+      // Premultiply rgb by opacity for premultiplied textures so faded icons
+      // composite 'over' under premult blend instead of staying full-brightness
+      // (premult blend adds rgb directly rather than weighting it by alpha).
+      // Straight-alpha textures keep raw rgb and fade via alpha as before.
+      float omul =
+          (texture_.exists() && texture_->premultiplied()) ? opacity_ : 1.0f;
 
       // Opaque portion may get drawn transparent or opaque depending on our
       // global opacity.
@@ -124,8 +132,8 @@ void ImageWidget::Draw(base::RenderPass* pass, bool draw_transparent) {
         if (should_draw) {
           base::SimpleComponent c(pass);
           c.SetTransparent(should_draw_transparent);
-          c.SetColor(color_red_ * db, color_green_ * db, color_blue_ * db,
-                     opacity_);
+          c.SetColor(color_red_ * db * omul, color_green_ * db * omul,
+                     color_blue_ * db * omul, opacity_);
           c.SetTexture(texture_);
           if (flatness_ != 0.0f) {
             c.SetFlatness(flatness_);
@@ -136,6 +144,9 @@ void ImageWidget::Draw(base::RenderPass* pass, bool draw_transparent) {
                                tint_color_blue_);
             c.SetColorizeColor2(tint2_color_red_, tint2_color_green_,
                                 tint2_color_blue_);
+          }
+          if (rotate_ != 0.0f) {
+            c.Rotate(rotate_, 0, 0, 1);
           }
           c.SetMaskTexture(mask_texture_.get());
           {
@@ -165,11 +176,14 @@ void ImageWidget::Draw(base::RenderPass* pass, bool draw_transparent) {
           && draw_transparent) {
         base::SimpleComponent c(pass);
         c.SetTransparent(true);
-        c.SetColor(color_red_ * db, color_green_ * db, color_blue_ * db,
-                   opacity_);
+        c.SetColor(color_red_ * db * omul, color_green_ * db * omul,
+                   color_blue_ * db * omul, opacity_);
         c.SetTexture(texture_);
         if (flatness_ != 0.0f) {
           c.SetFlatness(flatness_);
+        }
+        if (rotate_ != 0.0f) {
+          c.Rotate(rotate_, 0, 0, 1);
         }
         if (tint_texture_.exists()) {
           c.SetColorizeTexture(tint_texture_.get());

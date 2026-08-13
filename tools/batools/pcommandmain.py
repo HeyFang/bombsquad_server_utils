@@ -11,8 +11,6 @@ them).
 # launch times fast; most imports should happen within individual
 # command functions.
 
-from __future__ import annotations
-
 from efrotools import pcommand
 
 # Pull in commands we want to expose. Its more efficient to define them
@@ -42,8 +40,6 @@ from efrotools.pcommands import (
     compile_python_file,
     copy_python_file,
     compile_language_file,
-    compile_mesh_file,
-    compile_collision_mesh_file,
     compile_font_file,
     pyver,
     try_repeat,
@@ -60,23 +56,29 @@ from efrotools.pcommands2 import (
     sortlines,
     openal_android_build,
     openal_android_gather,
-    openal_mac_build,
-    openal_mac_gather,
+    openal_apple_build,
+    openal_apple_test_build,
+    openal_apple_gather,
     pyright,
     build_pcommandbatch,
     batchserver,
     pcommandbatch_speed_test,
     null,
 )
-from bacommontools.pcommands import bacurl, require_ballistica_api_key
+from bacommontools.pcommands import (
+    bacurl,
+    compile_collision_mesh,
+    compile_mesh,
+    require_ballistica_api_key,
+)
 from batools.pcommands import (
     resize_image,
     check_clean_safety,
     archive_old_builds,
     lazy_increment_build,
-    get_master_asset_src_dir,
     androidaddr,
     push_ipa,
+    push_ipa_to_archive,
     printcolors,
     prune_includes,
     python_version_android,
@@ -89,8 +91,9 @@ from batools.pcommands import (
     python_android_gather,
     python_build_apple,
     python_apple_gather,
-    build_angle_apple,
-    install_angle_apple_artifacts,
+    angle_apple_test_build,
+    angle_apple_build,
+    angle_apple_gather,
     python_android_patch_old,
     python_android_patch_ssl_old,
     python_gather,
@@ -138,14 +141,12 @@ from batools.pcommands2 import (
     spinoff_check_submodule_parent,
     tests_warm_start,
     wsl_path_to_win,
-    wsl_build_check_win_drive,
+    wsl_build_check,
     get_modern_make,
     assetpins,
     asset_bundle_build,
-    cst_test,
 )
 from batools.pcommands3 import (
-    test_game_run,
     compose_docker_gui_release,
     compose_docker_gui_debug,
     compose_docker_server_release,
@@ -159,7 +160,13 @@ from batools.pcommands3 import (
     generate_flathub_manifest,
     gen_pyembed,
 )
-from batools._automation import test_game_cmd
+from batools.pcommands4 import (
+    ios_sim_run,
+    ios_sim_log,
+    assetworkspace,
+    cst_test,
+    prefab_symbols_fetch,
+)
 
 # pylint: enable=unused-import
 

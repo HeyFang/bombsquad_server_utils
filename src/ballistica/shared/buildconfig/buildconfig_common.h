@@ -108,6 +108,14 @@ namespace ballistica {
 #define BA_VARIANT_TEST_BUILD 0
 #endif
 
+#ifndef BA_VARIANT_SERVER
+#define BA_VARIANT_SERVER 0
+#endif
+
+#ifndef BA_VARIANT_SERVER_BASN
+#define BA_VARIANT_SERVER_BASN 0
+#endif
+
 #ifndef BA_VARIANT_AMAZON_APPSTORE
 #define BA_VARIANT_AMAZON_APPSTORE 0
 #endif
@@ -149,11 +157,12 @@ namespace ballistica {
 #endif
 
 // Make sure exactly one of those is defined as 1
-#if (BA_VARIANT_GENERIC + BA_VARIANT_TEST_BUILD + BA_VARIANT_AMAZON_APPSTORE \
-     + BA_VARIANT_GOOGLE_PLAY + BA_VARIANT_APPLE_APP_STORE                   \
-     + BA_VARIANT_WINDOWS_STORE + BA_VARIANT_STEAM + BA_VARIANT_META         \
-     + BA_VARIANT_EPIC_GAMES_STORE + BA_VARIANT_ARCADE + BA_VARIANT_DEMO     \
-     + BA_VARIANT_CARDBOARD)                                                 \
+#if (BA_VARIANT_GENERIC + BA_VARIANT_TEST_BUILD + BA_VARIANT_SERVER      \
+     + BA_VARIANT_SERVER_BASN + BA_VARIANT_AMAZON_APPSTORE               \
+     + BA_VARIANT_GOOGLE_PLAY + BA_VARIANT_APPLE_APP_STORE               \
+     + BA_VARIANT_WINDOWS_STORE + BA_VARIANT_STEAM + BA_VARIANT_META     \
+     + BA_VARIANT_EPIC_GAMES_STORE + BA_VARIANT_ARCADE + BA_VARIANT_DEMO \
+     + BA_VARIANT_CARDBOARD)                                             \
     != 1
 #error Zero or multiple BA_VARIANT_* defines found.
 #endif
@@ -232,6 +241,14 @@ namespace ballistica {
 
 #ifndef BA_ENABLE_OS_FONT_RENDERING
 #define BA_ENABLE_OS_FONT_RENDERING 0
+#endif
+
+// Are we rendering GL through ANGLE (GL ES -> Metal/D3D/Vulkan) rather than a
+// platform-native GL? Already implied by the SDL/Windows ANGLE paths; this
+// explicit flag is what the Xcode iOS build flips to swap its system-GLES
+// (OpenGLES.framework/EAGL) usage for the vendored ANGLE xcframework + EGL.
+#ifndef BA_USE_ANGLE
+#define BA_USE_ANGLE 0
 #endif
 
 // Does this build support vr mode? (does not mean vr mode is always on)
@@ -332,6 +349,8 @@ class BuildConfig {
 
   bool variant_generic() const { return EXPBOOL_(BA_VARIANT_GENERIC); }
   bool variant_test_build() const { return EXPBOOL_(BA_VARIANT_TEST_BUILD); }
+  bool variant_server() const { return EXPBOOL_(BA_VARIANT_SERVER); }
+  bool variant_server_basn() const { return EXPBOOL_(BA_VARIANT_SERVER_BASN); }
   bool variant_amazon_appstore() const {
     return EXPBOOL_(BA_VARIANT_AMAZON_APPSTORE);
   }

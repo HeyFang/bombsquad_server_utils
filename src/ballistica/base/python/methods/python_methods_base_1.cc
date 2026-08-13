@@ -1114,35 +1114,6 @@ static PyMethodDef PyEmitLogDef = {
     ":meta private:",
 };
 
-// ----------------------------- v1_cloud_log ----------------------------------
-
-static auto PyV1CloudLog(PyObject* self, PyObject* args, PyObject* keywds)
-    -> PyObject* {
-  BA_PYTHON_TRY;
-  const char* message;
-  static const char* kwlist[] = {"message", nullptr};
-  if (!PyArg_ParseTupleAndKeywords(args, keywds, "s",
-                                   const_cast<char**>(kwlist), &message)) {
-    return nullptr;
-  }
-  g_core->logging->V1CloudLog(message);
-
-  Py_RETURN_NONE;
-  BA_PYTHON_CATCH;
-}
-
-static PyMethodDef PyV1CloudLogDef = {
-    "v1_cloud_log",                // name
-    (PyCFunction)PyV1CloudLog,     // method
-    METH_VARARGS | METH_KEYWORDS,  // flags
-
-    "v1_cloud_log(message: str) -> None\n"
-    "\n"
-    "Push messages to the old v1 cloud log.\n"
-    "\n"
-    ":meta private:",
-};
-
 // --------------------------- music_player_stop -------------------------------
 
 static auto PyMusicPlayerStop(PyObject* self, PyObject* args, PyObject* keywds)
@@ -1480,6 +1451,16 @@ static auto PyExecArg(PyObject* self) -> PyObject* {
   if (g_core->core_config().exec_command.has_value()) {
     return PyUnicode_FromString(g_core->core_config().exec_command->c_str());
   }
+  // On Android the exec arg rides an activity intent extra rather than
+  // argv, and the engine-init-time capture of it into core-config can
+  // lose a race against activity startup. This runs at on-app-running
+  // time, when the activity is reliably up, so consult the live value
+  // as a fallback. (No-op elsewhere; the base implementation returns
+  // an empty string.)
+  std::string android_exec = g_core->platform->GetAndroidExecArg();
+  if (!android_exec.empty()) {
+    return PyUnicode_FromString(android_exec.c_str());
+  }
   Py_RETURN_NONE;
   BA_PYTHON_CATCH;
 }
@@ -1645,16 +1626,15 @@ static auto PyEmptyAppModeHandleAppIntentExec(PyObject* self, PyObject* args,
                                    const_cast<char**>(kwlist), &command)) {
     return nullptr;
   }
-  // Simply run the command.
-  if (g_core->core_config().exec_command.has_value()) {
-    bool success = PythonCommand(*g_core->core_config().exec_command,
-                                 BA_BUILD_COMMAND_FILENAME)
-                       .Exec(true, nullptr, nullptr);
-    if (!success) {
-      // TODO(ericf): what should we do in this case?
-      //  Obviously if we add return/success values for intents we should set
-      //  that here.
-    }
+  // Simply run the command we were passed (the intent carries it;
+  // re-reading core-config here instead used to silently no-op on
+  // Android, where the config capture can lose a startup race).
+  bool success = PythonCommand(command, BA_BUILD_COMMAND_FILENAME)
+                     .Exec(true, nullptr, nullptr);
+  if (!success) {
+    // TODO(ericf): what should we do in this case?
+    //  Obviously if we add return/success values for intents we should set
+    //  that here.
   }
   Py_RETURN_NONE;
   BA_PYTHON_CATCH;
@@ -2007,7 +1987,6 @@ auto PythonMethodsBase1::GetMethods() -> std::vector<PyMethodDef> {
       PyAppNameUpperDef,
       PyIsXCodeBuildDef,
       PyEmitLogDef,
-      PyV1CloudLogDef,
       PyEnvDef,
       PyPreEnvDef,
       PyCommitAppConfigDef,

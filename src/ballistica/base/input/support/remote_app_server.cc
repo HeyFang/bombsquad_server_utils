@@ -6,6 +6,7 @@
 #include <string>
 
 #include "ballistica/base/assets/assets.h"
+#include "ballistica/base/assets/builtin_strings.h"
 #include "ballistica/base/audio/audio.h"
 #include "ballistica/base/graphics/graphics.h"
 #include "ballistica/base/graphics/support/screen_messages.h"
@@ -163,16 +164,14 @@ void RemoteAppServer::HandleData(int socket, uint8_t* buffer, size_t amt,
           char m[256];
           snprintf(m, sizeof(m), "%s", client->display_name);
 
-          // Replace ${CONTROLLER} with it in our message.
           std::string s =
-              g_base->assets->GetResourceString("controllerDisconnectedText");
-          Utils::StringReplaceOne(&s, "${CONTROLLER}", m);
+              BuiltinStrings::Input::ControllerDisconnected(m)->Evaluate();
           g_base->logic->event_loop()->PushCall([s] {
             g_base->graphics->screenmessages->AddScreenMessage(
                 s, false, Vector3f(1, 1, 1));
           });
           g_base->logic->event_loop()->PushCall([] {
-            g_base->audio->SafePlayBuiltinSoundOld(BuiltinSoundOldID::kCorkPop);
+            g_base->audio->SafePlayBuiltinSound(BuiltinSoundID::kAudioCorkPop);
           });
           g_base->input->PushRemoveInputDeviceCall(client->joystick_, false);
           client->joystick_ = nullptr;
@@ -372,17 +371,16 @@ auto RemoteAppServer::GetClient(int request_id, struct sockaddr* addr,
         char m[256];
         snprintf(m, sizeof(m), "%s", clients_[i].display_name);
 
-        // Replace ${CONTROLLER} with it in our message.
         std::string s =
-            g_base->assets->GetResourceString("controllerReconnectedText");
-        Utils::StringReplaceOne(&s, "${CONTROLLER}", m);
+            BuiltinStrings::Input::ControllerReconnected(m)->Evaluate();
         g_base->logic->event_loop()->PushCall([s] {
           g_base->graphics->screenmessages->AddScreenMessage(s, false,
                                                              Vector3f(1, 1, 1));
         });
         g_base->logic->event_loop()->PushCall([] {
           if (g_base->assets->asset_loads_allowed()) {
-            g_base->audio->SafePlayBuiltinSoundOld(BuiltinSoundOldID::kGunCock);
+            g_base->audio->SafePlayBuiltinSound(
+                BuiltinSoundID::kAudioGunCocking);
           }
         });
       }
@@ -422,10 +420,7 @@ auto RemoteAppServer::GetClient(int request_id, struct sockaddr* addr,
       // Print 'Billy Bob's iPhone Connected'
       snprintf(m, sizeof(m), "%s", clients_[i].display_name);
 
-      // Replace ${CONTROLLER} with it in our message.
-      std::string s =
-          g_base->assets->GetResourceString("controllerConnectedText");
-      Utils::StringReplaceOne(&s, "${CONTROLLER}", m);
+      std::string s = BuiltinStrings::Input::ControllerConnected(m)->Evaluate();
       g_base->logic->event_loop()->PushCall([s] {
         g_base->graphics->screenmessages->AddScreenMessage(s, false,
                                                            Vector3f(1, 1, 1));
@@ -433,7 +428,7 @@ auto RemoteAppServer::GetClient(int request_id, struct sockaddr* addr,
 
       g_base->logic->event_loop()->PushCall([] {
         if (g_base->assets->asset_loads_allowed()) {
-          g_base->audio->SafePlayBuiltinSoundOld(BuiltinSoundOldID::kGunCock);
+          g_base->audio->SafePlayBuiltinSound(BuiltinSoundID::kAudioGunCocking);
         }
       });
 

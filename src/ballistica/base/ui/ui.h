@@ -4,12 +4,15 @@
 #define BALLISTICA_BASE_UI_UI_H_
 
 #include <list>
+#include <map>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include "ballistica/base/graphics/support/frame_def.h"
 #include "ballistica/base/ui/widget_message.h"
+#include "ballistica/core/support/base_soft.h"
 #include "ballistica/shared/math/vector4f.h"
 
 namespace ballistica::base {
@@ -104,6 +107,24 @@ class UI {
   /// Draw regular UI.
   void Draw(FrameDef* frame_def);
 
+  /// Draw any active SimpleDialogs (over all game/UI but under the dev
+  /// console).
+  void DrawSimpleDialogs(FrameDef* frame_def);
+
+  /// SimpleDialog management (dialogs are addressed by integer id from
+  /// Python; see ``_babase.simpledialog_*`` / ``babase.SimpleDialog``).
+  /// CreateSimpleDialog returns the new dialog's id.
+  auto CreateSimpleDialog() -> int;
+  void SetSimpleDialogState(int id, const std::string& title,
+                            const std::string& message, float progress,
+                            const std::string& button_label);
+  void DismissSimpleDialog(int id);
+
+  /// Whether a (modal) SimpleDialog is currently up. While true, input
+  /// handlers should treat it as modal -- swallow input rather than letting
+  /// it reach the UI/game underneath (e.g. don't summon the main UI).
+  auto HasModalSimpleDialog() const -> bool { return !simple_dialogs_.empty(); }
+
   /// Draw dev UI on top.
   void DrawDev(FrameDef* frame_def);
 
@@ -139,8 +160,7 @@ class UI {
 
   auto* dev_console() const { return dev_console_; }
 
-  void PushDevConsolePrintCall(std::string_view msg, float scale,
-                               Vector4f color);
+  void PushDevConsolePrintCall(std::vector<core::DevConsolePrintEntry> entries);
 
   auto* delegate() const { return delegate_; }
 
@@ -178,12 +198,20 @@ class UI {
   auto InDevConsoleButton_(float x, float y) const -> bool;
   void DrawDevConsoleButton_(FrameDef* frame_def);
 
+  /// If a button-bearing SimpleDialog is active, fire its button and return
+  /// true (consuming the event). Routes OK/confirm from keyboard/controllers/
+  /// remotes (which funnel through SendWidgetMessage) to the dialog.
+  auto HandleSimpleDialogActivate_() -> bool;
+  void DispatchSimpleDialogButton_(int id, const char* source);
+
   Object::Ref<TextGroup> dev_console_button_txt_;
   Object::WeakRef<InputDevice> main_ui_input_device_;
   std::string account_state_name_;
   OperationContext* operation_context_{};
   base::UIDelegateInterface* delegate_{};
   DevConsole* dev_console_{};
+  std::map<int, std::unique_ptr<SimpleDialog>> simple_dialogs_;
+  int next_simple_dialog_id_{1};
   std::list<std::tuple<std::string, float, Vector4f>>
       dev_console_startup_messages_;
   millisecs_t last_main_ui_input_device_use_time_{};

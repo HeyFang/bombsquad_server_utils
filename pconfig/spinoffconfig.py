@@ -1,7 +1,6 @@
 # Released under the MIT License. See LICENSE for details.
 #
 # pylint: disable=missing-module-docstring, invalid-name
-from __future__ import annotations
 
 # This file is exec'ed by tools/spinoff, allowing us to customize how
 # this src project gits filtered into dst projects.
@@ -183,7 +182,6 @@ ctx.filter_file_names = {
     'testfoo.py',
     'testfoo2.py',
     'assets_phase_xcode',
-    'ballistica_maya_tools.mel',
     'check_python_syntax',
     'pcommand',
     'vmshell',
@@ -198,6 +196,7 @@ ctx.filter_file_names = {
     'ci.yml',
     'cd.yml',
     'deploy_docs.yml',
+    'mirror_repository.yml',
     'nightly.yml',
     'release.yml',
     'ballistica_dev_dockerfile',
@@ -221,7 +220,6 @@ ctx.no_filter_file_names = {
     'etcpack',
     'astcenc',
     'convert',
-    'make_bob',
     'nvcompress',
     'INSTALL',
     'install-sh',
@@ -276,6 +274,7 @@ ctx.filter_file_extensions = {
     '.hlsl',
     '.gradle',
     '.xml',
+    '.manifest',
     '.java',
     '.kt',
     '.pro',
@@ -331,4 +330,5 @@ ctx.no_filter_file_extensions = {
     '.keystore',
     '.bmp',
     '.pem',
+    '.zstddict',
 }

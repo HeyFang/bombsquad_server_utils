@@ -2,8 +2,6 @@
 #
 """Pcommands for bacommontools."""
 
-from __future__ import annotations
-
 
 def bacurl() -> None:
     """Run curl with the Ballistica API key injected.
@@ -13,7 +11,9 @@ def bacurl() -> None:
     Reads ``ballistica_api_key`` from ``pconfig/localconfig.json`` and
     passes it as a Bearer token in the Authorization header. All
     arguments are forwarded to curl. The ``-s`` (silent) flag is added
-    automatically.
+    automatically. HTTP errors exit non-zero (--fail-with-body) so piped
+    JSON parsing fails loudly instead of KeyError-ing on error payloads;
+    the error body still prints.
 
     Examples::
 
@@ -45,6 +45,7 @@ def bacurl() -> None:
     cmd = [
         'curl',
         '-s',
+        '--fail-with-body',
         '-H',
         f'Authorization: Bearer {api_key}',
         *args,
@@ -71,3 +72,65 @@ def require_ballistica_api_key() -> None:
         'Set the BALLISTICA_API_KEY env var or add'
         ' ballistica_api_key to pconfig/localconfig.json.'
     )
+
+
+def compile_mesh() -> None:
+    """Compile a display mesh from .obj to our binary .bob format.
+
+    Usage: compile_mesh <src.obj> <dst.bob>
+    """
+    import os
+
+    from efro.error import CleanError
+    from efrotools import pcommand
+
+    from bacommontools import meshcompile
+
+    args = pcommand.get_args()
+    if len(args) != 2:
+        raise CleanError('Expected 2 args (src and dst paths).')
+
+    src, dst = args
+
+    # Show project-relative paths when possible.
+    relpath = os.path.abspath(dst).removeprefix(f'{pcommand.PROJROOT}/')
+    pcommand.clientprint(f'Compiling mesh: {relpath}')
+
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    try:
+        meshcompile.compile_mesh(src, dst)
+    except ValueError as exc:
+        raise CleanError(f'Mesh compile failed: {exc}') from exc
+
+    assert os.path.exists(dst)
+
+
+def compile_collision_mesh() -> None:
+    """Compile a collision mesh from .obj to our binary .cob format.
+
+    Usage: compile_collision_mesh <src.obj> <dst.cob>
+    """
+    import os
+
+    from efro.error import CleanError
+    from efrotools import pcommand
+
+    from bacommontools import meshcompile
+
+    args = pcommand.get_args()
+    if len(args) != 2:
+        raise CleanError('Expected 2 args (src and dst paths).')
+
+    src, dst = args
+
+    # Show project-relative paths when possible.
+    relpath = os.path.abspath(dst).removeprefix(f'{pcommand.PROJROOT}/')
+    pcommand.clientprint(f'Compiling collision mesh: {relpath}')
+
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    try:
+        meshcompile.compile_collision_mesh(src, dst)
+    except ValueError as exc:
+        raise CleanError(f'Collision-mesh compile failed: {exc}') from exc
+
+    assert os.path.exists(dst)

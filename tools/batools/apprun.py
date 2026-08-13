@@ -5,8 +5,6 @@
 Manages constructing or downloading it as well as running it.
 """
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING
 import os
 import platform
@@ -132,7 +130,7 @@ def acquire_binary(purpose: str, *, gui: bool = False) -> str:
 
                 with open('.efrocachemap', encoding='utf-8') as efh:
                     will_fetch = binary_path in json.load(efh)
-            except (OSError, ValueError):
+            except OSError, ValueError:
                 pass
 
         if will_fetch:

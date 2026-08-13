@@ -8,10 +8,9 @@ clean, in-tree build that owns all build logic directly.
 No external repo dependency.
 """
 
-from __future__ import annotations
-
 import glob
 import os
+import re
 import subprocess
 import tarfile
 import urllib.request
@@ -32,15 +31,17 @@ if TYPE_CHECKING:
 # ``--out`` paths follow automatically.
 #
 # Both 3.13.12 and 3.14.4 have been verified building all 8 slices
-# end-to-end on linbeast as of 2026-05-03. To switch:
-#   PY_VER = '3.14'
-#   PY_VER_EXACT = '3.14.4'
-PY_VER = '3.13'
-PY_VER_EXACT = '3.13.12'
+# end-to-end on linbeast as of 2026-05-03; 3.14.6 is the active
+# version as of 2026-06-12. To switch back:
+#   PY_VER = '3.13'
+#   PY_VER_EXACT = '3.13.12'
+PY_VER = '3.14'
+PY_VER_EXACT = '3.14.6'
 ANDROID_API_VER = 24
 OPENSSL_VER = '3.0.19'
 ZLIB_VER = '1.3.2'
 XZ_VER = '5.8.2'
+ZSTD_VER = '1.5.7'
 BZIP2_VER = '1.0.8'
 LIBFFI_VER = '3.5.2'
 LIBUUID_VER: tuple[str, str] = ('2.41', '2.41')  # (minor, full)
@@ -450,6 +451,67 @@ def _build_xz(
     subprocess.run(['make', 'install'], cwd=srcdir, env=env, check=True)
 
 
+def _build_zstd(
+    cache_dir: str,
+    build_dir: str,
+    dep_sysroot: str,
+    env: dict[str, str],
+) -> None:
+    """Build and install zstd (libzstd) into dep_sysroot.
+
+    Backs Python 3.14's _zstd module (stdlib compression.zstd), which
+    the client asset pipeline needs at runtime to decode
+    zstd-compressed CAS blobs.
+    """
+    print('Building zstd...')
+    url = (
+        f'https://github.com/facebook/zstd/releases/'
+        f'download/v{ZSTD_VER}/zstd-{ZSTD_VER}.tar.gz'
+    )
+    tarball = _fetch(url, cache_dir)
+    srcdir = _extract(tarball, build_dir)
+
+    cc = env['CC']
+    ar = env['AR']
+    cflags = env.get('CFLAGS', '')
+
+    # zstd uses a plain Makefile with no configure. Build just the
+    # static lib; Python's _zstd module is our only consumer.
+    subprocess.run(
+        [
+            'make',
+            f'-j{_cpus()}',
+            '-C',
+            'lib',
+            'libzstd.a',
+            f'CC={cc}',
+            f'AR={ar}',
+            f'CFLAGS={cflags} -O2',
+        ],
+        cwd=srcdir,
+        env=env,
+        check=True,
+    )
+    # Manual install (the Makefile's install target also wants shared
+    # libs and pkg-config bits; we just need the static lib and the
+    # public headers _zstdmodule.c includes).
+    prefix = f'{dep_sysroot}/usr'
+    os.makedirs(f'{prefix}/include', exist_ok=True)
+    os.makedirs(f'{prefix}/lib', exist_ok=True)
+    for hdr in ['zstd.h', 'zdict.h', 'zstd_errors.h']:
+        subprocess.run(
+            ['cp', f'lib/{hdr}', f'{prefix}/include/'],
+            cwd=srcdir,
+            check=True,
+        )
+    subprocess.run(
+        ['cp', 'lib/libzstd.a', f'{prefix}/lib/'],
+        cwd=srcdir,
+        check=True,
+    )
+    subprocess.run([env['RANLIB'], f'{prefix}/lib/libzstd.a'], check=True)
+
+
 def _build_libuuid(
     cache_dir: str,
     build_dir: str,
@@ -593,6 +655,57 @@ def _patch_ctypes(pydir: str) -> None:
     writefile(fname, txt)
 
 
+def _patch_android_makefile(pydir: str) -> None:
+    """Patch the configure-generated Makefile for static-link correctness.
+
+    Clears MODULE__BLAKE2_LDFLAGS (Python 3.14+ only). Both the _blake2 and
+    _hmac static modules list the bundled HACL* Blake2 objects in their link
+    flags -- MODULE__HMAC_LDFLAGS pulls the full HACL* backend (MD5/SHA*/
+    Blake2/Memzero) unconditionally, and MODULE__BLAKE2_LDFLAGS pulls Blake2 +
+    Memzero again. With both modules enabled (we need _blake2 for
+    hashlib.blake2{b,s} -- OpenSSL is blocked for them -- and _hmac is
+    mandatory in 3.14), the python-executable link lists
+    Hacl_Hash_Blake2{b,s}.o and Lib_Memzero0.o twice and ld fails with
+    duplicate-symbol errors. Clearing _blake2's link flags leaves _hmac as the
+    sole provider of those objects; blake2module.o's references resolve against
+    that single copy. Unlike the Apple build (which skips the executable link
+    entirely), the Android build links the python executable during ``make``,
+    so this duplication is fatal here.
+
+    This only affects the throwaway executable link: libpython.a is archived
+    from the module objects (no HACL* objects) and then gets every HACL* object
+    appended exactly once afterwards (see build() step 7), so downstream app
+    static-links are unaffected either way.
+
+    No-op before 3.14 (there is no _hmac module then, so _blake2 is the only
+    provider and must keep its link flags).
+    """
+    if PY_VER == '3.13':
+        return
+    assert PY_VER == '3.14'
+
+    mk = os.path.join(pydir, 'Makefile')
+    with open(mk, encoding='utf-8') as fh:
+        txt = fh.read()
+    txt, n = re.subn(
+        r'^(MODULE__BLAKE2_LDFLAGS=).*$',
+        r'\1',
+        txt,
+        flags=re.MULTILINE,
+    )
+    if n == 0:
+        print(
+            '  Note: MODULE__BLAKE2_LDFLAGS not found in Makefile -- Python'
+            ' may have renamed it. Verify the python executable still links'
+            ' (no duplicate HACL Blake2 symbols) and update'
+            ' _patch_android_makefile() if needed.'
+        )
+    else:
+        print(f'  Cleared MODULE__BLAKE2_LDFLAGS ({n} occurrence(s)).')
+    with open(mk, 'w', encoding='utf-8') as fh:
+        fh.write(txt)
+
+
 # ---------------------------------------------------------------------------
 # Python configure + build
 # ---------------------------------------------------------------------------
@@ -635,6 +748,12 @@ def _configure_python(
     # -lm needed because libsqlite3.a uses log/pow/exp/etc from libm.
     env['LIBSQLITE3_LIBS'] = f'-L{dep_lib} -lsqlite3 -lm'
 
+    # Same story for _zstd (new in 3.14): configure looks for libzstd
+    # via PKG_CHECK_MODULES([LIBZSTD]); pass the flags directly so it
+    # finds our static dep build without pkg-config.
+    env['LIBZSTD_CFLAGS'] = f'-I{dep_inc}'
+    env['LIBZSTD_LIBS'] = f'-L{dep_lib} -lzstd'
+
     subprocess.run(configure_cmd, cwd=pydir, env=env, check=True)
 
 
@@ -666,6 +785,34 @@ def _check_no_shared_modules(installdir: str, arch: str) -> None:
             f'Update cmodules/enables in pybuild.patch_modules_setup().'
         )
     print(f'  Static-module check passed for Android/{arch}.')
+
+
+def _check_zstd_in_libpython(
+    installdir: str, arch: str, debug: bool, env: dict[str, str]
+) -> None:
+    """Fail if the _zstd module didn't make it into libpython.
+
+    _zstd is enabled via pybuild.patch_modules_setup, but it only
+    actually builds if Python's configure detected libzstd (via the
+    LIBZSTD_* flags we pass). If detection quietly fails, configure
+    just marks the module missing and the breakage only shows up as a
+    runtime ModuleNotFoundError in the app; catch it at build time
+    instead.
+    """
+    if PY_VER == '3.13':
+        return
+    dbgsfx = 'd' if debug else ''
+    libpython_a = os.path.join(
+        installdir, f'usr/lib/libpython{PY_VER}{dbgsfx}.a'
+    )
+    assert os.path.isfile(libpython_a), libpython_a
+    listing = subprocess.check_output([env['AR'], 't', libpython_a]).decode()
+    if '_zstdmodule.o' not in listing:
+        raise RuntimeError(
+            f'Android/{arch}: _zstdmodule.o not found in libpython;'
+            f' configure likely failed to detect libzstd.'
+        )
+    print(f'  _zstd static-inclusion check passed for Android/{arch}.')
 
 
 # ---------------------------------------------------------------------------
@@ -735,6 +882,7 @@ def build(rootdir: str, arch: str, debug: bool) -> None:
     _build_libffi(cache_dir, deps_build_dir, dep_sysroot, arch, env)
     _build_sqlite(cache_dir, deps_build_dir, dep_sysroot, arch, env)
     _build_xz(cache_dir, deps_build_dir, dep_sysroot, arch, env)
+    _build_zstd(cache_dir, deps_build_dir, dep_sysroot, env)
     _build_libuuid(cache_dir, deps_build_dir, dep_sysroot, arch, env)
 
     # 3. Patch NDK headers and Python source.
@@ -751,6 +899,11 @@ def build(rootdir: str, arch: str, debug: bool) -> None:
         pydir, arch, ANDROID_API_VER, dep_sysroot, env, debug, build_python
     )
 
+    # 4b. Patch the generated Makefile (3.14+: avoid duplicate HACL Blake2
+    # objects in the python-executable link now that _blake2 is enabled
+    # alongside the mandatory _hmac).
+    _patch_android_makefile(pydir)
+
     # 5. Build Python.
     print('Building Python...')
     subprocess.run(['make', f'-j{_cpus()}'], cwd=pydir, env=env, check=True)
@@ -764,9 +917,28 @@ def build(rootdir: str, arch: str, debug: bool) -> None:
         check=True,
     )
 
-    # 7. Verify no shared extension modules slipped through.
+    # 7. Python 3.14+ links the static _hmac module against the bundled
+    # HACL* crypto objects via MODULE__HMAC_LDFLAGS instead of archiving
+    # them into libpython.a, leaving undefined _Py_LibHacl_* symbols for
+    # downstream static links. Append the built HACL objects into the
+    # installed libpython archive. No-op if absent (pre-3.14).
+    hacl_objs = sorted(glob.glob(os.path.join(pydir, 'Modules/_hacl/*.o')))
+    if hacl_objs:
+        print(f'Appending {len(hacl_objs)} HACL objects to libpython...')
+        dbgsfx = 'd' if debug else ''
+        libpython_a = os.path.join(
+            installdir, f'usr/lib/libpython{PY_VER}{dbgsfx}.a'
+        )
+        assert os.path.isfile(libpython_a), libpython_a
+        subprocess.run([env['AR'], '-q', libpython_a] + hacl_objs, check=True)
+
+    # 8. Verify no shared extension modules slipped through.
     print('Checking for shared extension modules...')
     _check_no_shared_modules(installdir, arch)
+
+    # 9. Verify _zstd actually got compiled in (3.14+).
+    print('Checking for static _zstd module...')
+    _check_zstd_in_libpython(installdir, arch, debug, env)
 
     print(f'=== Python {PY_VER_EXACT} for Android/{arch} build complete! ===')
     print(f'    Output: {installdir}')
@@ -1072,6 +1244,7 @@ def gather(rootdir: str) -> None:
                 f'{bases2[arch]}/usr/lib/libssl.a',
                 f'{bases2[arch]}/usr/lib/libcrypto.a',
                 f'{bases2[arch]}/usr/lib/liblzma.a',
+                f'{bases2[arch]}/usr/lib/libzstd.a',
                 f'{bases2[arch]}/usr/lib/libsqlite3.a',
                 f'{bases2[arch]}/usr/lib/libffi.a',
                 f'{bases2[arch]}/usr/lib/libbz2.a',

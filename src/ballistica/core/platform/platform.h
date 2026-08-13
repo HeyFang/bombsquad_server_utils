@@ -39,13 +39,6 @@ class Platform {
   virtual void OnScreenSizeChange();
   virtual void StepDisplayTime();
 
-  // Get/set values before standard game settings are available (for values
-  // needed before SDL init/etc). FIXME: We should have some sort of
-  // 'bootconfig.json' file for these. (or simply read the regular config in
-  // via c++ immediately)
-  auto GetLowLevelConfigValue(const char* key, int default_value) -> int;
-  void SetLowLevelConfigValue(const char* key, int value);
-
 #pragma mark FILES -------------------------------------------------------------
 
   /// remove() supporting UTF8 strings.
@@ -192,9 +185,13 @@ class Platform {
   /// Are we running on fireTV hardware?
   virtual auto IsRunningOnFireTV() -> bool;
 
-  // For enabling some special hardware optimizations for nvidia.
-  auto is_tegra_k1() const -> bool { return is_tegra_k1_; }
-  void set_is_tegra_k1(bool val) { is_tegra_k1_ = val; }
+  /// Whether this is a flagged low-end device. Only ever true on Android
+  /// (computed Java-side from GLES version + RAM before the renderer comes
+  /// up); always false on desktop/iOS. Drives reduced framebuffer color
+  /// depth, render resolution, and graphics quality. See
+  /// docs/initiatives/low-end-device-tiering.md.
+  auto low_end_device() const -> bool { return low_end_device_; }
+  void set_low_end_device(bool val) { low_end_device_ = val; }
 
   /// Run system() command on OSs which support it. Throws exception
   /// elsewhere.
@@ -246,6 +243,38 @@ class Platform {
   // BA_ENABLE_OS_FONT_RENDERING is set)
   virtual void GetTextBoundsAndWidth(const std::string& text, Rect* r,
                                      float* width);
+
+  /// Return utf-8 byte offsets within a (valid utf-8) string where a new
+  /// line may begin, as determined by the OS text stack (Unicode UAX #14
+  /// line-breaking incl. dictionary-based word segmentation for scripts
+  /// such as Thai where the OS supports it). Offsets are strictly between
+  /// 0 and text.size(), in increasing order, and always fall on utf-8
+  /// sequence boundaries. Mandatory breaks (after newlines) are included
+  /// as regular opportunities; callers wanting to honor them specially
+  /// should pre-split on newlines. The base implementation is a naive
+  /// space/newline breaker for platforms without OS support (headless
+  /// etc.). Logic thread only.
+  virtual auto GetTextLineBreakOffsets(const std::string& text)
+      -> std::vector<int>;
+
+  /// Split (valid utf-8) text into newline-separated lines subject to
+  /// simple constraints, breaking only at opportunities reported by
+  /// GetTextLineBreakOffsets() and treating all characters as equal
+  /// width. Uses the fewest lines keeping every line within
+  /// max_chars_per_line (when > 0) while staying between min_lines and
+  /// max_lines (0 means unlimited), and balances line lengths within
+  /// that count. Constraints are best-effort: lines can exceed
+  /// max_chars_per_line when unavoidable and fewer lines than min_lines
+  /// come back when there are not enough break opportunities. Newlines
+  /// in the input are treated as regular break opportunities, and
+  /// whitespace at line edges is stripped (so splitting the result on
+  /// newlines recovers the individual lines). Intended as a stopgap
+  /// for plugging flat translated strings into places expecting
+  /// preformatted line counts until proper font-aware wrapping exists.
+  /// Logic thread only.
+  auto SplitTextIntoLines(const std::string& text, int min_lines = 1,
+                          int max_lines = 0, int max_chars_per_line = 0)
+      -> std::string;
   virtual void FreeTextTexture(void* tex);
   virtual auto CreateTextTexture(int width, int height,
                                  const std::vector<std::string>& strings,
@@ -488,11 +517,6 @@ class Platform {
   /// Are we being run from a terminal? (should we show prompts, etc?).
   auto is_stdin_a_terminal() const { return is_stdin_a_terminal_; }
 
-  void set_music_app_playlists(const std::list<std::string>& playlists) {
-    mac_music_app_playlists_ = playlists;
-  }
-  auto mac_music_app_playlists() const { return mac_music_app_playlists_; }
-
  protected:
   /// Are we being run from a terminal? (should we show prompts, etc?).
   virtual auto GetIsStdinATerminal() -> bool;
@@ -574,7 +598,7 @@ class Platform {
   bool is_stdin_a_terminal_{};
   bool have_has_touchscreen_value_{};
   bool have_touchscreen_{};
-  bool is_tegra_k1_{};
+  bool low_end_device_{};
   bool made_cache_dir_{};
   bool have_device_uuid_{};
   bool ran_base_post_init_{};
@@ -584,9 +608,6 @@ class Platform {
   std::string legacy_device_uuid_;
   std::string cache_dir_;
   std::string replays_dir_;
-
-  // Temp; should be able to remove this once Swift 5.10 is out.
-  std::list<std::string> mac_music_app_playlists_;
 
   std::mutex network_availability_mutex_;
   std::vector<NetworkAvailabilityCallback> network_availability_callbacks_;

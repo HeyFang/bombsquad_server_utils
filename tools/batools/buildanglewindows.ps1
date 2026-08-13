@@ -1,16 +1,15 @@
 # Builds ANGLE OpenGL ES libraries for Windows via vcpkg and stages the
-# artifacts to build/angle-artifacts/ for pickup by the build system.
+# artifacts to build/angle-windows-artifacts/ for pickup by the build system.
 #
-# The Windows analog of tools/batools/buildangleapple.py. PowerShell (rather
-# than a Python pcommand) because it must run natively on the windows host,
-# across the WSL boundary from our make/python tooling. Invoked remotely via
-# 'make _update-angle-windows'; do not run directly.
+# PowerShell (rather than a Python pcommand) because it must run natively on
+# the windows host, across the WSL boundary from our make/python tooling.
+# Invoked remotely via 'make _update-angle-windows'; do not run directly.
 
 $ErrorActionPreference = 'Stop'
 
 # Repo root is two levels up from the tools/batools/ dir holding this script.
 $RepoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
-$StagingDir = "$RepoRoot\build\angle-artifacts"
+$StagingDir = "$RepoRoot\build\angle-windows-artifacts"
 
 $Triplets = @(
     @{ Name = 'x64-windows';   LibArch = 'x64';   DllArch = 'x64'   },
@@ -26,12 +25,14 @@ function Find-Git {
         'C:\Program Files (x86)\Git\cmd\git.exe',
         (Join-Path $env:LOCALAPPDATA 'Programs\Git\cmd\git.exe')
     )
-    foreach ($vsEdition in @('Community', 'Professional', 'Enterprise', 'BuildTools')) {
-        $candidates += (
-            "C:\Program Files\Microsoft Visual Studio\2022\$vsEdition\" +
-            'Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\' +
-            'Team Explorer\Git\cmd\git.exe'
-        )
+    foreach ($vsVersion in @('18', '2022')) {
+        foreach ($vsEdition in @('Community', 'Professional', 'Enterprise', 'BuildTools')) {
+            $candidates += (
+                "C:\Program Files\Microsoft Visual Studio\$vsVersion\$vsEdition\" +
+                'Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\' +
+                'Team Explorer\Git\cmd\git.exe'
+            )
+        }
     }
     foreach ($c in $candidates) {
         if (Test-Path $c) { return $c }
@@ -89,13 +90,32 @@ try {
     & "$VcpkgDir\bootstrap-vcpkg.bat" -disableMetrics
     if ($LASTEXITCODE -ne 0) { throw "vcpkg bootstrap failed." }
 
+    # Set up overlay triplets: identical to the stock ones except zlib is
+    # linked statically. Our staged ANGLE DLLs must not carry an external
+    # zlib runtime dependency — we ship only libEGL.dll/libGLESv2.dll, and
+    # vcpkg's zlib DLL name is not stable (it changed zlib1.dll -> z.dll in
+    # 2026, which broke shipped builds; the old name was only ever
+    # accidentally satisfied by the Python distribution's zlib1.dll).
+    $TripletDir = Join-Path $TempDir 'triplets'
+    New-Item -ItemType Directory -Path $TripletDir -Force | Out-Null
+    foreach ($triplet in $Triplets) {
+        $name = $triplet.Name
+        Copy-Item "$VcpkgDir\triplets\$name.cmake" "$TripletDir\$name.cmake"
+        Add-Content "$TripletDir\$name.cmake" @"
+
+if(PORT STREQUAL "zlib")
+    set(VCPKG_LIBRARY_LINKAGE static)
+endif()
+"@
+    }
+
     foreach ($triplet in $Triplets) {
         $name = $triplet.Name
         Write-Host ""
         Write-Host "=== Building ANGLE for $name ==="
         Write-Host ""
 
-        & "$VcpkgDir\vcpkg.exe" install "angle:$name" --no-binarycaching --no-print-usage --clean-after-build
+        & "$VcpkgDir\vcpkg.exe" install "angle:$name" --overlay-triplets "$TripletDir" --no-binarycaching --no-print-usage --clean-after-build
         if ($LASTEXITCODE -ne 0) { throw "ANGLE build failed for $name." }
 
         $InstallDir = "$VcpkgDir\installed\$name"
@@ -106,6 +126,10 @@ try {
             $Dst = "$StagingDir\include\$dir"
             if (-not (Test-Path $Src)) { throw "Expected header dir not found: $Src" }
             Write-Host "  Staging headers: $dir"
+            # Remove any existing destination first; Copy-Item copies *into*
+            # an existing dir (yielding nested EGL\EGL\ from the 2nd/3rd
+            # triplets) rather than replacing it.
+            if (Test-Path $Dst) { Remove-Item $Dst -Recurse -Force }
             Copy-Item $Src $Dst -Recurse -Force
         }
 

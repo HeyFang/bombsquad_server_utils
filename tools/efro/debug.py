@@ -14,8 +14,6 @@ Enable them only for debugging situations and be aware that their use may
 itself cause problems. The same is true for the gc module itself.
 """
 
-from __future__ import annotations
-
 import os
 import gc
 import sys
@@ -499,6 +497,14 @@ def _desctype(obj: Any) -> str:
     if cls is types.MethodType:
         bnd = 'bound' if hasattr(obj, '__self__') else 'unbound'
         return f'{bnd} {type(obj).__name__} {obj.__name__}'
+    if cls is types.FunctionType:
+        return f'{type(obj).__name__} {obj.__module__}.{obj.__qualname__}'
+    if cls is types.CellType:
+        try:
+            contents = _desctype(obj.cell_contents)
+        except ValueError:
+            return f'{type(obj).__name__} (empty)'
+        return f'{type(obj).__name__} (contains {contents})'
     return f'{type(obj).__name__}'
 
 

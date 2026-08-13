@@ -2,8 +2,6 @@
 #
 """Documentation generation functionality."""
 
-from __future__ import annotations
-
 import os
 import re
 import json
@@ -446,6 +444,13 @@ def generate_sphinx_docs() -> None:
     _printstatus('Injecting imported-members for __all__-declared modules...')
     _inject_imported_members(cache_dir, environ)
 
+    # Inject ``:no-undoc-members:`` into apidoc rst for asset-package
+    # wrapper modules so their (huge) per-asset attribute lists stay
+    # hidden — the docs show only the documented group classes +
+    # accessors, each with a viewcode [source] link to the full list.
+    _printstatus('Injecting no-undoc-members for asset-package wrappers...')
+    _inject_wrapper_options(cache_dir, environ)
+
     _printstatus('Running sphinx-build...')
     subprocess.run(
         [
@@ -542,6 +547,92 @@ def _modules_with_all(modnames: list[str], environ: dict[str, str]) -> set[str]:
     return set(json.loads(result.stdout.strip().splitlines()[-1]))
 
 
+def _inject_wrapper_options(rst_dir: Path, environ: dict[str, str]) -> None:
+    """Add ``:no-undoc-members:`` to apidoc rst for wrapper modules.
+
+    Asset-package wrapper modules expose a documented group class +
+    accessor per top-level group, but their per-asset attributes are
+    undocumented (and there can be thousands). ``:no-undoc-members:``
+    hides those so the page shows just the groups (each with a viewcode
+    ``[source]`` link to the full list). Wrapper modules are detected by
+    their ``__asset_package__`` attribute.
+    """
+    rst_files = sorted(rst_dir.glob('*.rst'))
+    name_re = re.compile(r'^\.\. automodule:: ([A-Za-z0-9_.]+)\s*$', re.M)
+    referenced: set[str] = set()
+    for rst in rst_files:
+        with open(rst, encoding='utf-8') as infile:
+            referenced.update(name_re.findall(infile.read()))
+    if not referenced:
+        return
+
+    wrappers = _wrapper_modules(sorted(referenced), environ)
+    if not wrappers:
+        return
+
+    # Match a whole ``automodule`` directive: its head line plus the
+    # indented option lines that follow. apidoc emits an explicit
+    # ``:undoc-members:`` (and the global default also enables it), so to
+    # turn it off we must *replace* that option with ``:no-undoc-members:``
+    # within the block — appending the negation alongside the original
+    # leaves a contradiction that autodoc resolves in favor of showing
+    # them.
+    block_re = re.compile(
+        r'^\.\. automodule:: ([A-Za-z0-9_.]+)[^\n]*\n(?:[ \t]+:[^\n]*\n)*',
+        re.M,
+    )
+
+    def _fix_block(match: re.Match[str]) -> str:
+        block = match.group(0)
+        if match.group(1) not in wrappers:
+            return block
+        if '   :undoc-members:\n' in block:
+            return block.replace(
+                '   :undoc-members:\n', '   :no-undoc-members:\n'
+            )
+        if '   :no-undoc-members:\n' not in block:
+            head, rest = block.split('\n', 1)
+            return f'{head}\n   :no-undoc-members:\n{rest}'
+        return block
+
+    for rst in rst_files:
+        with open(rst, encoding='utf-8') as infile:
+            text = infile.read()
+        new_text = block_re.sub(_fix_block, text)
+        if new_text != text:
+            with open(rst, 'w', encoding='utf-8') as outfile:
+                outfile.write(new_text)
+
+
+def _wrapper_modules(modnames: list[str], environ: dict[str, str]) -> set[str]:
+    """Return the subset of ``modnames`` that are asset-package wrappers.
+
+    A wrapper module is identified by its ``__asset_package__`` module
+    attribute. Runs in a subprocess (same rationale as
+    :func:`_modules_with_all`).
+    """
+    probe = (
+        'import importlib, json, sys\n'
+        'out = []\n'
+        'for name in sys.argv[1:]:\n'
+        '    try:\n'
+        '        m = importlib.import_module(name)\n'
+        '    except Exception:\n'
+        '        continue\n'
+        '    if hasattr(m, "__asset_package__"):\n'
+        '        out.append(name)\n'
+        'print(json.dumps(out))\n'
+    )
+    result = subprocess.run(
+        ['python3', '-c', probe, *modnames],
+        env=environ,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return set(json.loads(result.stdout.strip().splitlines()[-1]))
+
+
 def _collect_private_submodule_paths(root: Path) -> list[str]:
     """Walk a tree, return paths of underscore-prefixed submodules.
 
@@ -615,13 +706,43 @@ def _sphinx_pre_filter_file(path: str) -> None:
     # TYPE_CHECKING' blocks in the context of each module but only after
     # everything had been initially imported. Sounds tricky but could
     # work I think.
-    if bool(False):
+    # Asset-package wrapper modules keep their full typed asset tree in
+    # an ``if TYPE_CHECKING`` block (dead at runtime) with the dynamic
+    # runtime in an ``if not TYPE_CHECKING`` block. For docs we flip
+    # ``TYPE_CHECKING`` True in the *filtered* copy so the typed tree
+    # goes live (and the runtime block goes dead) and Sphinx can
+    # document the groups. This is the targeted form of the global hack
+    # the comment above describes: doing it for *every* module caused
+    # cross-module import cycles, but a wrapper's only TYPE_CHECKING
+    # import is its already-loaded parent feature-set, and the forced
+    # ``from __future__ import annotations`` keeps annotations stringized
+    # so nothing new is evaluated at import — so it's safe here.
+    #
+    # We ALSO un-guard the ``if not TYPE_CHECKING`` runtime block so it
+    # stays live alongside the typed one. Flipping TYPE_CHECKING alone
+    # would kill it, and then the wrapper exposes no runtime ``strings`` /
+    # ``audio`` / ... attributes — which breaks *consumer* modules that
+    # bind one at module scope (e.g. bauiv1lib/settings/advanced.py's
+    # ``_advstrs = classicassets.strings.settings.advanced``); autodoc then
+    # fails to import them entirely. Both blocks can coexist: the typed
+    # block only declares classes plus bare annotations, and the runtime
+    # block only assigns the matching names (lazy Dir objects that do no
+    # I/O at construction), so the assignment simply fills in the value
+    # the annotation describes.
+    if re.search(
+        r'Asset-package wrapper for ``[^`]+`` \((?:bascenev1|bauiv1)\)',
+        source_code,
+    ):
         final_code = final_code.replace(
             '\nif TYPE_CHECKING:\n',
             (
                 '\nTYPE_CHECKING = True  # Docs-generation hack\n'
                 'if TYPE_CHECKING:\n'
             ),
+        )
+        final_code = final_code.replace(
+            '\nif not TYPE_CHECKING:\n',
+            '\nif True:  # Docs-generation hack; keep runtime tree live\n',
         )
     if bool(True):
         final_code = final_code + (
@@ -635,6 +756,33 @@ def _sphinx_pre_filter_file(path: str) -> None:
             'from pathlib import Path\n'
             'from enum import Enum\n'
         )
+
+    # Docs-generation hack: force PEP 563 string annotations in these
+    # filtered copies (the real tree uses PEP 649 deferred evaluation,
+    # the 3.14+ default). Sphinx evaluates annotations when documenting,
+    # and TYPE_CHECKING-only names that can't resolve at runtime come
+    # back as ugly '__annotationlib_name_N__' placeholders under
+    # deferred evaluation; with stringized annotations sphinx just
+    # renders the source text and links what it can resolve (helped by
+    # the hack-imports appended above).
+    import ast as _ast
+
+    _mod = _ast.parse(final_code)
+    _insert_line = 0
+    if (
+        _mod.body
+        and isinstance(_mod.body[0], _ast.Expr)
+        and isinstance(_mod.body[0].value, _ast.Constant)
+        and isinstance(_mod.body[0].value.value, str)
+        and _mod.body[0].end_lineno is not None
+    ):
+        _insert_line = _mod.body[0].end_lineno
+    _lines = final_code.splitlines(keepends=True)
+    _lines.insert(
+        _insert_line,
+        '\nfrom __future__ import annotations  # Docs-generation hack.\n',
+    )
+    final_code = ''.join(_lines)
 
     with open(filenameout, 'w', encoding='utf-8') as f:
         f.write(final_code)

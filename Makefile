@@ -161,6 +161,8 @@ assets-android: env codegen
 # Clean all assets.
 assets-clean:
 	@rm -f $(LAZYBUILDDIR)/assets*
+	@rm -rf .cache/asset_bundle
+	@rm -rf .cache/assets
 	cd src/assets && $(MAKE) clean
 
 # Build resources.
@@ -189,7 +191,7 @@ codegen-clean:
 # Inspect / update asset-package pins. Convenience aliases for the
 # pcommand subcommands; richer invocations (specific
 # VERSION/TARGET combos, track switching, etc.) should go through
-# ``tools/pcommand assetpins update <VERSION> <TARGET>`` directly
+# ``tools/pcommand assetpins update <TARGET> <VERSION>`` directly
 # (since make targets can't take CLI-style args). `assetpins` is
 # the only build-flow entry that talks to the cloud and the only
 # one that mutates checked-in source as part of normal use — see
@@ -200,18 +202,23 @@ assetpins:
 # Move every pin to the newest version on its current track.
 # Dev pins re-resolve; prod/test pins move to the newest of
 # their type if upstream has published one. Convenience for
-# `tools/pcommand assetpins update latest all`. For finer
+# `tools/pcommand assetpins update all latest`. For finer
 # control (single package, single file, track switching, exact
 # version), invoke the underlying pcommand directly.
 assetpins-latest:
 	@$(PCOMMAND) assetpins update all latest
+
+# Show full assetpins usage (the pcommand's docstring).
+assetpins-help:
+	@$(PCOMMAND) help assetpins
 
 # (No dedicated assetpins-check make target — non-prod pins are
 # flagged prominently in ``make assetpins`` output, and the
 # check fires automatically as part of ``blessing check``,
 # pubsync push, and other gates that already enforce
 # "shippable build" invariants. Callers that want the bare
-# check can run ``tools/pcommand assetpins check`` directly.)
+# check can run ``tools/pcommand assetpins assert-prod-only``
+# directly.)
 
 # Clean asset-bundle outputs (manifests + CAS blobs).
 assets-resolve-clean:
@@ -279,9 +286,39 @@ venv: .venv/.efro_venv_complete
 # (further down) handles the actual regeneration based on
 # requirements.txt's mtime — calling ``make`` again here pulls
 # that rule in once requirements_upgrade has finished writing.
+# Two distinct ways the lockfile moves, and they mean different things:
+#
+# - Editing pconfig/requirements.txt (adding or bumping a direct dep)
+#   makes the requirements_lock.txt rule fire on the next make of
+#   anything -- it is a file target, reached via
+#   env -> tools/pcommand -> .venv/.efro_venv_complete. That re-resolve
+#   is *minimal*: the edit is honored in full, along with whatever it
+#   transitively requires, and every other pin stays put. So adding one
+#   package can't quietly reformat the repo by dragging a new black in
+#   with it.
+#
+# - `make upgrade` (via this target) passes --upgrade, which discards
+#   existing pins and re-resolves the whole graph to the newest versions
+#   the constraints permit -- transitive deps included. Direct deps are
+#   exact-pinned in requirements.txt so they move only via
+#   requirements_upgrade below; --upgrade is the only thing that keeps
+#   *transitives* from rotting. They rot invisibly: they have no entry
+#   in requirements.txt, and only one of our repos has Dependabot
+#   watching (which is how four CVEs sat frozen until 2026-07-29).
+#
+# Same split as bundle install/update, cargo build/update, and
+# pip-compile with and without --upgrade. Keep them distinct: collapsing
+# them means either transitives freeze forever, or every trivial
+# requirements.txt edit becomes an unplanned full upgrade.
 venv-upgrade: env
 	$(PCOMMAND) requirements_upgrade pconfig/requirements.txt
-	@$(MAKE) pconfig/requirements_lock.txt
+# --always-make because the lock rule is a *file* target: when
+# requirements_upgrade finds no direct dep to bump (the common case)
+# requirements.txt is untouched, make would call the lock up to date,
+# and the sweep would silently do nothing -- which is the exact
+# failure this target exists to prevent.
+	@$(MAKE) --always-make pconfig/requirements_lock.txt \
+      UV_COMPILE_UPGRADE=--upgrade
 
 venv-clean:
 	rm -rf .venv
@@ -717,6 +754,15 @@ build/prefab/lib/windows/Release_%/BallisticaKitHeadlessPlus.lib: .efrocachemap
 build/prefab/lib/windows/Release_%/BallisticaKitHeadlessPlus.pdb: .efrocachemap
 	@$(PCOMMANDBATCH) efrocache_get $@
 
+# Fetch debug symbols (.pdb files) for any Windows prefab binaries
+# currently present under build/prefab/full. Symbols are looked up by
+# exe hash from the master server's recent push-public artifact
+# archives, so this works for recent builds only. With a .pdb sitting
+# next to its exe, native stack traces in fatal-error output come out
+# fully symbolicated.
+prefab-windows-symbols: env
+	@$(PCOMMAND) prefab_symbols_fetch
+
 # Tell make which of these targets don't represent files.
 .PHONY: prefab-gui-debug prefab-gui-release prefab-gui-debug-build						\
         prefab-gui-release-build prefab-server-debug prefab-server-release		\
@@ -749,7 +795,8 @@ build/prefab/lib/windows/Release_%/BallisticaKitHeadlessPlus.pdb: .efrocachemap
         prefab-windows-x86-64-server-debug	                                  \
         prefab-windows-x86-64-server-debug-build                              \
         prefab-windows-x86-64-server-release                                  \
-        prefab-windows-x86-64-server-release-build
+        prefab-windows-x86-64-server-release-build                            \
+        prefab-windows-symbols _prefab-windows-pdbs
 
 
 ################################################################################
@@ -865,6 +912,7 @@ update-check: env-pre-update
 upgrade: env
 	@$(MAKE) venv-upgrade
 	@$(MAKE) python-site-packages
+	@$(MAKE) assetpins-latest
 	@$(PCOMMANDBATCH) echo GRN Upgrade-Project: SUCCESS!
 
 # Tell make which of these targets don't represent files.
@@ -1219,7 +1267,7 @@ windows-debug-build: env \
    build/prefab/lib/windows/Debug_$(WINPREVSP)/BallisticaKitGenericPlus.lib \
    build/prefab/lib/windows/Debug_$(WINPREVSP)/BallisticaKitGenericPlus.pdb
 	@$(WSLW) $(PCOMMAND) ensure_prefab_platform $(WINPREPLT)
-	@$(PCOMMAND) wsl_build_check_win_drive
+	@$(PCOMMAND) wsl_build_check $(WIN_MSBUILD_EXE_B)
 	WINDOWS_CONFIGURATION=Debug WINDOWS_PLATFORM=$(WINPREVSP) \
  $(MAKE) windows-staging
 	WINDOWS_PROJECT=Generic WINDOWS_CONFIGURATION=Debug \
@@ -1230,7 +1278,7 @@ windows-debug-rebuild: env \
    build/prefab/lib/windows/Debug_$(WINPREVSP)/BallisticaKitGenericPlus.lib \
    build/prefab/lib/windows/Debug_$(WINPREVSP)/BallisticaKitGenericPlus.pdb
 	@$(WSLW) $(PCOMMAND) ensure_prefab_platform $(WINPREPLT)
-	@$(PCOMMAND) wsl_build_check_win_drive
+	@$(PCOMMAND) wsl_build_check $(WIN_MSBUILD_EXE_B)
 	WINDOWS_CONFIGURATION=Debug WINDOWS_PLATFORM=$(WINPREVSP) \
  $(MAKE) windows-staging
 	WINDOWS_PROJECT=Generic WINDOWS_CONFIGURATION=Debug \
@@ -1241,7 +1289,7 @@ windows-release-build: env \
    build/prefab/lib/windows/Release_$(WINPREVSP)/BallisticaKitGenericPlus.lib \
    build/prefab/lib/windows/Release_$(WINPREVSP)/BallisticaKitGenericPlus.pdb
 	@$(WSLW) $(PCOMMAND) ensure_prefab_platform $(WINPREPLT)
-	@$(PCOMMAND) wsl_build_check_win_drive
+	@$(PCOMMAND) wsl_build_check $(WIN_MSBUILD_EXE_B)
 	WINDOWS_CONFIGURATION=Release WINDOWS_PLATFORM=$(WINPREVSP) \
  $(MAKE) windows-staging
 	WINDOWS_PROJECT=Generic WINDOWS_CONFIGURATION=Release \
@@ -1252,7 +1300,7 @@ windows-release-rebuild: env \
    build/prefab/lib/windows/Release_$(WINPREVSP)/BallisticaKitGenericPlus.lib \
    build/prefab/lib/windows/Release_$(WINPREVSP)/BallisticaKitGenericPlus.pdb
 	@$(WSLW) $(PCOMMAND) ensure_prefab_platform $(WINPREPLT)
-	@$(PCOMMAND) wsl_build_check_win_drive
+	@$(PCOMMAND) wsl_build_check $(WIN_MSBUILD_EXE_B)
 	WINDOWS_CONFIGURATION=Release WINDOWS_PLATFORM=$(WINPREVSP) \
  $(MAKE) windows-staging
 	WINDOWS_PROJECT=Generic WINDOWS_CONFIGURATION=Release \
@@ -1270,19 +1318,30 @@ windows-clean-list: env
 	git clean -dnx ballisticakit-windows
 	echo would also remove build/windows $(LAZYBUILDDIR)
 
-# Build apple ANGLE GL-ES xcframeworks locally and stage them to
-# build/angle-artifacts/. Self-contained (clones a throwaway vcpkg); needs
-# Xcode command-line tools. Follow with 'make angle-apple-gather' to install.
-angle-apple-build-local: env
-	@$(PCOMMAND) build_angle_apple
+# Build all Apple ANGLE GL-ES -> Metal xcframeworks (macOS/iOS/tvOS + a macOS
+# debug-validation variant) via ANGLE's native gn build, into
+# build/angle-apple/artifacts/. Cheap 'test' variant for CI / exercising the
+# pipeline; reuses an existing checkout. Self-contained (depot_tools fetches a
+# hermetic clang/gn/ninja); needs Xcode + git. Follow with 'make
+# angle-apple-gather' to install into the source tree.
+angle-apple-test-build: env
+	@$(PCOMMAND) angle_apple_test_build
 
-# Install staged apple ANGLE artifacts from build/angle-artifacts/ into the
-# source tree (src/external/angle-apple/).
+# Build the shipping-tier Apple ANGLE xcframeworks from scratch (optimized +
+# stripped + bundled dSYMs) plus the macOS debug-validation dylibs. Always a
+# full clean build (wipes build/angle-apple/ + re-syncs ANGLE); set
+# BA_ANGLE_APPLE_KEEP_CHECKOUT=1 to reuse the existing checkout for fast local
+# iteration. Follow with 'make angle-apple-gather'.
+angle-apple-build: env
+	@$(PCOMMAND) angle_apple_build
+
+# Install assembled Apple ANGLE xcframeworks from build/angle-apple/artifacts/
+# into src/external/angle-apple (+ -debug).
 angle-apple-gather: env
-	@$(PCOMMAND) install_angle_apple_artifacts
-	@$(PCOMMAND) echo GRN BLD ANGLE Apple artifacts installed successfully.
+	@$(PCOMMAND) angle_apple_gather
+	@$(PCOMMAND) echo GRN BLD ANGLE Apple xcframeworks installed successfully.
 
-.PHONY: angle-apple-build-local angle-apple-gather
+.PHONY: angle-apple-test-build angle-apple-build angle-apple-gather
 
 
 ################################################################################
@@ -1538,21 +1597,21 @@ ENV_SRC = tools/batools/build.py .venv/.efro_venv_complete
 # This is an env dependency so should not itself depend on env.
 tools/pcommand: tools/efrotools/genwrapper.py .venv/.efro_venv_complete
 	@echo Generating tools/pcommand...
-	@PYTHONPATH=tools python3 -m \
+	@PYTHONPATH=tools .venv/bin/$(VENV_PYTHON) -m \
  efrotools.genwrapper pcommand batools.pcommandmain tools/pcommand
 
 # Generate a cloudshell script hard-coded to use our virtual environment.
 # This is an env dependency so should not itself depend on env.
 tools/cloudshell: tools/efrotools/genwrapper.py .venv/.efro_venv_complete
 	@echo Generating tools/cloudshell...
-	@PYTHONPATH=tools python3 -m \
+	@PYTHONPATH=tools .venv/bin/$(VENV_PYTHON) -m \
  efrotools.genwrapper cloudshell efrotoolsinternal.cloudshell tools/cloudshell
 
 # Generate a bacloud script hard-coded to use our virtual environment.
 # This is an env dependency so should not itself depend on env.
 tools/bacloud: tools/efrotools/genwrapper.py .venv/.efro_venv_complete
 	@echo Generating tools/bacloud...
-	@PYTHONPATH=tools python3 -m \
+	@PYTHONPATH=tools .venv/bin/$(VENV_PYTHON) -m \
  efrotools.genwrapper bacloud bacommontools.bacloud tools/bacloud
 
 .clang-format: pconfig/toolconfigsrc/clang-format $(TOOL_CFG_SRC)
@@ -1582,7 +1641,7 @@ tools/bacloud: tools/efrotools/genwrapper.py .venv/.efro_venv_complete
 # Set this to 1 to skip environment checks.
 SKIP_ENV_CHECKS ?= 0
 
-VENV_PYTHON ?= python3.13
+VENV_PYTHON ?= python3.14
 
 # Increment this to force all downstream venvs to fully rebuild. Useful after
 # removing requirements since upgrading venvs in place will never uninstall
@@ -1623,7 +1682,11 @@ pconfig/requirements_lock.txt: pconfig/requirements.txt
 # .venv exists at compile time (libcst, e.g., declares
 # environment-marker-conditional deps that change with the
 # resolver's view of the target Python).
+# ``UV_COMPILE_UPGRADE`` is empty for a normal (minimal) re-resolve and
+# ``--upgrade`` when invoked from venv-upgrade; see the comment on that
+# target for why the two cases are kept apart.
 	@uv pip compile --universal --generate-hashes --quiet \
+ $(UV_COMPILE_UPGRADE) \
  --python $(VENV_PYTHON) \
  pconfig/requirements.txt -o pconfig/requirements_lock.txt
 
@@ -1693,9 +1756,9 @@ $(PCOMMANDBATCHBIN): $(PCOMMANDBATCHSRC) $(PCOMMAND)
 CM_BT_LC = $(shell echo $(CMAKE_BUILD_TYPE) | tr A-Z a-z)
 
 # Eww; no way to do multi-line constants in make without spaces :-(
-_WMSBE_1 = \"C:\\Program Files\\Microsoft Visual Studio\\2022
+_WMSBE_1 = \"C:\\Program Files\\Microsoft Visual Studio\\18
 _WMSBE_2 = \\Community\\MSBuild\\Current\\Bin\\MSBuild.exe\"
-_WMSBE_1B = /mnt/c/Program Files/Microsoft Visual Studio/2022
+_WMSBE_1B = /mnt/c/Program Files/Microsoft Visual Studio/18
 _WMSBE_2B = /Community/MSBuild/Current/Bin/MSBuild.exe
 
 # Sets WSL build type to the user's choice (defaults to Windows).
@@ -1705,7 +1768,7 @@ WSLL=BA_WSL_TARGETS_WINDOWS=0
 # Sets WSL build type to Windows.
 WSLW=BA_WSL_TARGETS_WINDOWS=1
 
-VISUAL_STUDIO_VERSION = -property:VisualStudioVersion=17
+VISUAL_STUDIO_VERSION = -property:VisualStudioVersion=18
 WIN_MSBUILD_EXE = $(_WMSBE_1)$(_WMSBE_2)
 WIN_MSBUILD_EXE_B = "$(_WMSBE_1B)$(_WMSBE_2B)"
 WIN_POWERSHELL_EXE_B = /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe
@@ -1739,7 +1802,7 @@ ballisticakit-cmake/.clang-format: .clang-format
 	@$(PCOMMANDBATCH) echo BLU Created compile commands db at $@
 
 _windows-wsl-build: env
-	@$(PCOMMAND) wsl_build_check_win_drive
+	@$(PCOMMAND) wsl_build_check $(WIN_MSBUILD_EXE_B)
 	$(WIN_MSBUILD_EXE_B) \
    $(shell $(PCOMMAND) wsl_path_to_win --escape \
    ballisticakit-windows/$(WINPRJ)/BallisticaKit$(WINPRJ).vcxproj) \
@@ -1750,7 +1813,7 @@ _windows-wsl-build: env
 	@$(PCOMMAND) echo BLU BLD Built build/windows/BallisticaKit$(WINPRJ).exe.
 
 _windows-wsl-rebuild: env
-	@$(PCOMMAND) wsl_build_check_win_drive
+	@$(PCOMMAND) wsl_build_check $(WIN_MSBUILD_EXE_B)
 	$(WIN_MSBUILD_EXE_B) \
    $(shell $(PCOMMAND) wsl_path_to_win --escape \
     ballisticakit-windows/$(WINPRJ)/BallisticaKit$(WINPRJ).vcxproj) \

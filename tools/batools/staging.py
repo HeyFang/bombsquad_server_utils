@@ -2,8 +2,6 @@
 #
 """Stage files for builds."""
 
-from __future__ import annotations
-
 import os
 import sys
 import subprocess
@@ -39,12 +37,8 @@ class BuildStager:
         self.win_type: str | None = None
         self.include_python_dylib = False
         self.include_shell_executable = False
-        self.include_audio = True
-        self.include_meshes = True
-        self.include_collision_meshes = True
         self.include_scripts = True
         self.include_python = True
-        self.include_textures = True
         self.include_fonts = True
         self.include_json = True
         self.include_pylib = False
@@ -58,7 +52,6 @@ class BuildStager:
         self.executable_name: str | None = None
         self.pylib_src_path: str | None = None
         self.include_payload_file = False
-        self.tex_suffix: str | None = None
         self.is_payload_full = False
         self.debug: bool | None = None
         self.builddir: str | None = None
@@ -177,14 +170,12 @@ class BuildStager:
         elif platform_arg == '-cmake':
             self.desc = 'cmake'
             self.dst = args[-1]
-            self.tex_suffix = '.dds'
             # Link/copy in a binary *if* builddir is provided.
             self.include_binary_executable = self.builddir is not None
             self.executable_name = 'ballisticakit'
         elif platform_arg == '-cmakemodular':
             self.desc = 'cmake modular'
             self.dst = args[-1]
-            self.tex_suffix = '.dds'
             self.include_python_dylib = True
             self.include_shell_executable = True
             self.executable_name = 'ballisticakit'
@@ -192,9 +183,6 @@ class BuildStager:
             self.desc = 'cmake server'
             self.dst = os.path.join(args[-1], 'dist')
             self.serverdst = args[-1]
-            self.include_textures = False
-            self.include_audio = False
-            self.include_meshes = False
             # Link/copy in a binary *if* builddir is provided.
             self.include_binary_executable = self.builddir is not None
             self.executable_name = 'ballisticakit_headless'
@@ -202,9 +190,6 @@ class BuildStager:
             self.desc = 'cmake modular server'
             self.dst = os.path.join(args[-1], 'dist')
             self.serverdst = args[-1]
-            self.include_textures = False
-            self.include_audio = False
-            self.include_meshes = False
             self.include_python_dylib = True
             self.include_shell_executable = True
             self.executable_name = 'ballisticakit_headless'
@@ -218,18 +203,18 @@ class BuildStager:
             )
             self.include_pylib = True
             self.pylib_src_path = 'pylib-apple'
-            self.tex_suffix = '.dds'
-        elif platform_arg == '-xcode-ios':
-            self.desc = 'xcode ios'
-            self.src = os.environ['SOURCE_ROOT'] + '/build/assets'
+        elif platform_arg in ('-xcode-ios', '-xcode-tvos'):
+            # iOS and tvOS stage identically (same Apple pylib + asset
+            # layout into the .app bundle's flat Resources dir).
+            self.desc = 'xcode ' + platform_arg.removeprefix('-xcode-')
+            self.src = os.environ['SOURCE_ROOT'] + '/../build/assets'
             self.dst = (
                 os.environ['TARGET_BUILD_DIR']
                 + '/'
                 + os.environ['UNLOCALIZED_RESOURCES_FOLDER_PATH']
             )
-            self.include_pylib = False
-            # self.pylib_src_path = 'pylib-apple'
-            self.tex_suffix = '.pvr'
+            self.include_pylib = True
+            self.pylib_src_path = 'pylib-apple'
         else:
             raise RuntimeError('No valid platform arg provided.')
 
@@ -264,7 +249,6 @@ class BuildStager:
         self.pylib_src_path = 'pylib-android'
         self.include_payload_file = True
         self.is_payload_full = True
-        self.tex_suffix = '.ktx'
         self.include_pylib = True
 
     def _parse_win_args(self, platform: str, args: list[str]) -> None:
@@ -273,16 +257,12 @@ class BuildStager:
         self.win_platform = winplt
         self.win_type = wintype
         assert winempty == ''
-        self.tex_suffix = '.dds'
 
         if wintype == 'win':
             self.dst = args[-1]
         elif wintype == 'winserver':
             self.dst = os.path.join(args[-1], 'dist')
             self.serverdst = args[-1]
-            self.include_textures = False
-            self.include_audio = False
-            self.include_meshes = False
         else:
             raise RuntimeError(f"Invalid wintype: '{wintype}'.")
 
@@ -369,10 +349,12 @@ class BuildStager:
                 'ogg.dll',
                 'OpenAL32.dll',
                 'SDL3.dll',
-                # zlib1.dll lives in DLLs/ (Python dependency) but also needs
-                # to be at the top level because ANGLE (libGLESv2.dll) depends
-                # on it for shader blob caching.
-                'DLLs/zlib1.dll',
+                # ANGLE (libGLESv2.dll) depends on zlib1.dll for shader
+                # blob caching. Through Python 3.13 we borrowed the copy
+                # in Python's DLLs/; 3.14 links zlib statically and no
+                # longer ships the dll, so we now stage our own top-level
+                # copy alongside the other ANGLE bits.
+                'zlib1.dll',
             ]
         elif self.win_type == 'winserver':
             toplevelfiles += [f'python{dbgsfx}.exe']
@@ -487,16 +469,9 @@ class BuildStager:
         else:
             # Shouldn't be trying to do sparse stuff in server builds.
             if self.serverdst is not None:
-                assert self.include_json and self.include_collision_meshes
+                assert self.include_json
             else:
-                assert (
-                    self.include_textures
-                    and self.include_audio
-                    and self.include_fonts
-                    and self.include_json
-                    and self.include_meshes
-                    and self.include_collision_meshes
-                )
+                assert self.include_fonts and self.include_json
             # Keep rsync from deleting the other stuff we're overlaying.
             cmd += ['--exclude', '/python-dylib']
 
@@ -506,26 +481,17 @@ class BuildStager:
                 '*.py',
                 '--include',
                 '*.pem',
+                # Bundled zstd dictionaries (e.g. bacommon mesh dicts) ride
+                # along with the scripts they accompany.
+                '--include',
+                '*.zstddict',
             ]
-
-        if self.include_textures:
-            assert self.tex_suffix is not None
-            cmd += ['--include', f'*{self.tex_suffix}']
-
-        if self.include_audio:
-            cmd += ['--include', '*.ogg']
 
         if self.include_fonts:
             cmd += ['--include', '*.fdata']
 
         if self.include_json:
             cmd += ['--include', '*.json']
-
-        if self.include_meshes:
-            cmd += ['--include', '*.bob']
-
-        if self.include_collision_meshes:
-            cmd += ['--include', '*.cob']
 
         # By default we want to include all dirs and exclude all files.
         cmd += [
@@ -572,6 +538,56 @@ class BuildStager:
                 )
         return hashes
 
+    def _verify_builtin_apverid_bundled(
+        self, bundle_manifest_path: str
+    ) -> None:
+        """Fail loudly if the compiled-in builtin apverid isn't bundled.
+
+        ``base.h``'s autogenerated ``kBuiltinAssetsApverid`` is the
+        asset-package version the binary's ``LoadBuiltinTexture`` calls
+        ask for at startup. If the asset-id splice drifts from the staged
+        bundle — a half-applied ``assetpins update``, a lazybuild-skipped
+        codegen, a hand-edited pin — every builtin load asks for an
+        unbundled package and the binary crashes on launch under a flood
+        of ``Asset not found in package`` errors. Catching it here, the
+        last step before the artifact is runnable, turns that confusing
+        runtime crash into one actionable build-time message.
+
+        Compares apverid strings only (not the full splice): that's the
+        field that drifts, and it's robust without a resolved manifest or
+        a matching clang-format. Skips quietly if base.h has no splice.
+        """
+        import re
+        import json
+
+        from efro.error import CleanError
+
+        base_h_path = f'{self.projroot}/src/ballistica/base/base.h'
+        if not os.path.exists(base_h_path):
+            return
+        with open(base_h_path, encoding='utf-8') as infile:
+            match = re.search(
+                r'kBuiltinAssetsApverid\s*=\s*"([^"]+)"', infile.read()
+            )
+        if match is None:
+            return
+        builtin_apverid = match.group(1)
+
+        with open(bundle_manifest_path, encoding='utf-8') as infile:
+            bundled = set(json.load(infile).get('asset_package_versions', {}))
+
+        if builtin_apverid not in bundled:
+            raise CleanError(
+                f"Builtin-asset splice is stale: base.h kBuiltinAssetsApverid"
+                f" is '{builtin_apverid}', but the staged"
+                f" '{self.asset_bundle_profile}' bundle contains"
+                f' {sorted(bundled)}. The compiled-in builtin package is not'
+                f' in the bundle, so this build would crash on launch. Re-sync'
+                f' the splice with `tools/pcommand assetpins update'
+                f' babuiltinassets <ver>` (now self-healing) or `tools/pcommand'
+                f' gen_builtin_asset_ids`, then rebuild.'
+            )
+
     def _sync_asset_bundle(self) -> None:
         """Stage the build's asset bundle into ba_data/.
 
@@ -600,6 +616,41 @@ class BuildStager:
             f'{self.asset_bundle_profile}/manifest.json'
         )
         if not os.path.exists(bundle_manifest_path):
+            bundle_root = f'{self.projroot}/.cache/asset_bundle'
+            siblings = (
+                sorted(
+                    e
+                    for e in os.listdir(bundle_root)
+                    if os.path.isdir(os.path.join(bundle_root, e))
+                )
+                if os.path.isdir(bundle_root)
+                else []
+            )
+            if siblings:
+                # Our profile is missing but *other* profiles are present:
+                # this is a corrupt/partial asset cache, not an asset-target
+                # wiring bug. lazybuild guards the assets sub-build on the
+                # existence of the shared .cache/asset_bundle dir (so a full
+                # `rm -rf .cache/asset_bundle` re-triggers it), but a sibling
+                # profile's presence satisfies that dir-level check -- so with
+                # a stale lazybuild marker a single missing profile gets
+                # skipped rather than rebuilt. Clearing the whole dir restores
+                # the guard's ability to fire.
+                raise RuntimeError(
+                    f"Asset bundle manifest for profile"
+                    f" '{self.asset_bundle_profile}' was not found at"
+                    f' {bundle_manifest_path}, but other profiles are present'
+                    f' ({', '.join(siblings)}). This is a corrupt/partial'
+                    f' asset cache (a single bundle profile is missing while'
+                    f' siblings remain), so lazybuild -- which guards the'
+                    f' assets sub-build on the existence of the shared'
+                    f' .cache/asset_bundle dir -- saw the dir present (via a'
+                    f' sibling) and skipped the rebuild. Clear the asset'
+                    f' bundle cache and rebuild:\n'
+                    f'    rm -rf .cache/asset_bundle\n'
+                    f' (with the dir fully gone, lazybuild re-triggers the'
+                    f' assets build and regenerates every profile).'
+                )
             raise RuntimeError(
                 f"Asset bundle manifest for profile"
                 f" '{self.asset_bundle_profile}' was not found at"
@@ -616,6 +667,11 @@ class BuildStager:
                 f' server assets target (assets-server /'
                 f' assets-windows-server).'
             )
+
+        # Last-chance consistency gate before this bundle becomes a
+        # runnable artifact: the compiled-in builtin apverid must be one
+        # of the packages we're staging (see the method docstring).
+        self._verify_builtin_apverid_bundled(bundle_manifest_path)
 
         wanted_hashes = self._collect_bundle_hashes(bundle_manifest_path)
         wanted: set[tuple[str, str]] = {(h[:2], h[2:]) for h in wanted_hashes}
@@ -717,7 +773,7 @@ class BuildStager:
                 '# Basically this will do:\n'
                 '#   import baenv; baenv.configure();'
                 ' import babase; babase.app.run().\n'
-                'exec python3.13 ba_data/python/baenv.py "$@"\n'
+                f'exec python{PYVER} ba_data/python/baenv.py "$@"\n'
             )
         subprocess.run(['chmod', '+x', path], check=True)
 

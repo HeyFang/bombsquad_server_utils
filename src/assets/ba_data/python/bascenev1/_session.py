@@ -2,8 +2,6 @@
 #
 """Defines base session class."""
 
-from __future__ import annotations
-
 import math
 import weakref
 import logging
@@ -163,7 +161,9 @@ class Session:
             for i, color in enumerate(team_colors):
                 team = SessionTeam(
                     team_id=self._next_team_id,
-                    name=GameActivity.get_team_display_string(team_names[i]),
+                    name=GameActivity.get_team_display_string(
+                        team_names[i], langstr=True
+                    ),
                     color=color,
                 )
                 self.sessionteams.append(team)
@@ -215,6 +215,11 @@ class Session:
 
         This should return True or False to accept/reject.
         """
+        # Safe up-call: bascenev1 is fully imported by the time
+        # this runs; the cycle pylint sees is structural only.
+        # pylint: disable-next=cyclic-import
+        from bascenev1 import builtinassets, classicassets
+
         # Limit player counts *unless* we're in a stress test.
         if (
             babase.app.classic is not None
@@ -223,11 +228,10 @@ class Session:
             if len(self.sessionplayers) >= self.max_players >= 0:
                 # Print a rejection message *only* to the client trying to
                 # join (prevents spamming everyone else in the game).
-                _bascenev1.getsound('error').play()
+                builtinassets.audio.error.get().play()
                 _bascenev1.broadcastmessage(
-                    babase.Lstr(
-                        resource='playerLimitReachedText',
-                        subs=[('${COUNT}', str(self.max_players))],
+                    classicassets.strings.session.player_limit_reached(
+                        count=self.max_players
                     ),
                     color=(0.8, 0.0, 0.0),
                     clients=[player.inputdevice.client_id],
@@ -240,21 +244,11 @@ class Session:
         if identifier:
             leave_time = self._players_on_wait.get(identifier)
             if leave_time:
-                diff = str(
-                    math.ceil(
-                        _g_player_rejoin_cooldown
-                        - babase.apptime()
-                        + leave_time
-                    )
+                diff = math.ceil(
+                    _g_player_rejoin_cooldown - babase.apptime() + leave_time
                 )
                 _bascenev1.broadcastmessage(
-                    babase.Lstr(
-                        translate=(
-                            'serverResponses',
-                            'You can join in ${COUNT} seconds.',
-                        ),
-                        subs=[('${COUNT}', diff)],
-                    ),
+                    builtinassets.strings.session.join_cooldown(seconds=diff),
                     color=(1, 1, 0),
                     clients=[player.inputdevice.client_id],
                     transient=True,
@@ -262,11 +256,15 @@ class Session:
                 return False
             self._player_requested_identifiers[player.id] = identifier
 
-        _bascenev1.getsound('dripity').play()
+        classicassets.audio.dripity.get().play()
         return True
 
     def on_player_leave(self, sessionplayer: bascenev1.SessionPlayer) -> None:
         """Called when a previously-accepted bascenev1.SessionPlayer leaves."""
+        # Safe up-call: bascenev1 is fully imported by the time
+        # this runs; the cycle pylint sees is structural only.
+        # pylint: disable-next=cyclic-import
+        from bascenev1 import classicassets
 
         if sessionplayer not in self.sessionplayers:
             print(
@@ -275,7 +273,7 @@ class Session:
             )
             return
 
-        _bascenev1.getsound('playerLeft').play()
+        classicassets.audio.player_left.get().play()
 
         activity = self._activity_weak()
 
@@ -305,9 +303,8 @@ class Session:
             assert sessionteam is not None
 
             _bascenev1.broadcastmessage(
-                babase.Lstr(
-                    resource='playerLeftText',
-                    subs=[('${PLAYER}', sessionplayer.getname(full=True))],
+                classicassets.strings.session.player_left(
+                    player=sessionplayer.getname(full=True)
                 )
             )
 
@@ -603,6 +600,15 @@ class Session:
                     self.lobby.add_chooser(sessionplayer)
                 except Exception:
                     logging.exception('Error in lobby.add_chooser().')
+                    # The player never made it into the lobby, so roll
+                    # back the append above; otherwise we're left with a
+                    # half-joined 'ghost' player in the session, which
+                    # corrupts later activity transitions (and can wedge
+                    # the whole server). Deny the join so the native
+                    # layer doesn't consider them present either.
+                    if sessionplayer in self.sessionplayers:
+                        self.sessionplayers.remove(sessionplayer)
+                    result = False
 
         return result
 
@@ -653,6 +659,11 @@ class Session:
 
     def _on_player_ready(self, chooser: bascenev1.Chooser) -> None:
         """Called when a bascenev1.Player has checked themself ready."""
+        # Safe up-call: bascenev1 is fully imported by the time
+        # this runs; the cycle pylint sees is structural only.
+        # pylint: disable-next=cyclic-import
+        from bascenev1 import builtinassets, classicassets
+
         lobby = chooser.lobby
         activity = self._activity_weak()
 
@@ -679,13 +690,12 @@ class Session:
                 self._complete_end_activity(activity, {})
             else:
                 _bascenev1.broadcastmessage(
-                    babase.Lstr(
-                        resource='notEnoughPlayersText',
-                        subs=[('${COUNT}', str(min_players))],
+                    classicassets.strings.session.not_enough_players(
+                        count=min_players
                     ),
                     color=(1, 1, 0),
                 )
-                _bascenev1.getsound('error').play()
+                builtinassets.audio.error.get().play()
 
         # Otherwise just add players on the fly.
         else:
@@ -721,6 +731,10 @@ class Session:
     def _add_chosen_player(
         self, chooser: bascenev1.Chooser
     ) -> bascenev1.SessionPlayer:
+        # Safe up-call: bascenev1 is fully imported by the time
+        # this runs; the cycle pylint sees is structural only.
+        # pylint: disable-next=cyclic-import
+        from bascenev1 import classicassets
         from bascenev1._team import SessionTeam
 
         sessionplayer = chooser.getplayer()
@@ -752,11 +766,8 @@ class Session:
                 pass_to_activity = False
                 with self.context:
                     _bascenev1.broadcastmessage(
-                        babase.Lstr(
-                            resource='playerDelayedJoinText',
-                            subs=[
-                                ('${PLAYER}', sessionplayer.getname(full=True))
-                            ],
+                        classicassets.strings.session.player_delayed_join(
+                            player=sessionplayer.getname(full=True)
                         ),
                         color=(0, 1, 0),
                     )

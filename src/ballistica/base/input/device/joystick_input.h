@@ -4,6 +4,7 @@
 #define BALLISTICA_BASE_INPUT_DEVICE_JOYSTICK_INPUT_H_
 
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
 
@@ -37,7 +38,34 @@ class JoystickInput : public InputDevice {
   void Update() override;
   void ResetHeldStates() override;
 
+  auto DoApplyFeedback(const FeedbackEvent& event) -> int override;
+  void DoStopFeedback() override;
+
   auto sdl_joystick_id() const -> int { return sdl_joystick_id_; }
+
+  /// An opaque handle assigned by whichever app-adapter created this
+  /// device, for platforms that feed us joysticks manually instead of
+  /// through SDL (currently Apple's GameController layer). It means
+  /// nothing to anyone but that adapter, which is the point: it lets the
+  /// adapter get back to its own controller object without the engine
+  /// growing a per-platform notion of controller identity. -1 when the
+  /// device came from somewhere with no such handle.
+  auto platform_controller_id() const -> int { return platform_controller_id_; }
+  void set_platform_controller_id(int val) { platform_controller_id_ = val; }
+
+  /// Whether this controller's haptics are wide-band (voice coils, a
+  /// Taptic Engine) rather than eccentric-rotating-mass flywheels.
+  ///
+  /// Wide-band actuators start and stop in about a millisecond and
+  /// render what they are asked; ERM motors need ~100ms of runway
+  /// before anything is felt at all. That gap is large enough that one
+  /// set of numbers cannot serve both, so backends correct for it.
+  ///
+  /// Defaults to false, which is the safe direction: treating wide-band
+  /// hardware as ERM makes events somewhat too long, while the reverse
+  /// makes them imperceptible.
+  auto has_wide_band_haptics() const { return has_wide_band_haptics_; }
+  void set_has_wide_band_haptics(bool val) { has_wide_band_haptics_ = val; }
 
   auto GetAllowsConfiguring() -> bool override { return can_configure_; }
 
@@ -75,7 +103,7 @@ class JoystickInput : public InputDevice {
 
   auto HasMeaningfulButtonNames() -> bool override;
 
-  auto GetButtonName(int index) -> std::string override;
+  auto GetButtonName(int index) -> std::shared_ptr<const LangStr> override;
 
   /// Custom controller types can pass in controller-specific button names.
   void SetButtonName(int button, const std::string& name);
@@ -91,6 +119,10 @@ class JoystickInput : public InputDevice {
  private:
   void UpdateRunningState();
   auto GetCalibratedValue(float raw, float neutral) const -> int32_t;
+
+  /// Device-specific glyph name for a button, or empty if we have none
+  /// (in which case the caller falls back to the generic 'Button N').
+  auto DeviceButtonNameText_(int index) -> std::string;
 
   JoystickInput* child_joy_stick_{};
   JoystickInput* parent_joy_stick_{};
@@ -165,6 +197,8 @@ class JoystickInput : public InputDevice {
   int up_button2_{-1};
   int down_button2_{-1};
   int sdl_joystick_id_{};
+  int platform_controller_id_{-1};
+  bool has_wide_band_haptics_{};
   float run_value_{};
   float run_trigger1_min_{};
   float run_trigger1_max_{};

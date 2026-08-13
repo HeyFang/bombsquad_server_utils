@@ -6,6 +6,7 @@
 #include <cmath>
 
 #include "ballistica/base/assets/assets.h"
+#include "ballistica/base/assets/texture_asset.h"
 #include "ballistica/base/base.h"
 #include "ballistica/base/graphics/component/simple_component.h"
 
@@ -46,59 +47,68 @@ void SpinnerWidget::Draw(base::RenderPass* pass, bool draw_transparent) {
 
   auto alpha{std::max(0.0, std::min(1.0, presence_ * 2.0 - 1.0))};
 
-  base::SimpleComponent c(pass);
-  c.SetTransparent(true);
-  c.SetColor(1.0f, 1.0f, 1.0f, alpha);
-
+  // Select our texture up front so we can honor its premultiplied flag below.
+  base::BuiltinTextureID tex_id;
   if (style_ == Style::kSimple) {
-    c.SetTexture(
-        g_base->assets->BuiltinTextureOld(base::BuiltinTextureOldID::kSpinner));
+    tex_id = base::BuiltinTextureID::kTexturesSpinner;
   } else {
     assert(style_ == Style::kBomb);
     // Advance through our 12 frames at 24fps.
     auto frame{
         static_cast<int>(std::floor(std::fmod(current_time * 24.0, 12.0)))};
-    base::BuiltinTextureOldID tex;
     switch (frame) {
       case 0:
-        tex = base::BuiltinTextureOldID::kSpinner0;
+        tex_id = base::BuiltinTextureID::kTexturesSpinner0;
         break;
       case 1:
-        tex = base::BuiltinTextureOldID::kSpinner1;
+        tex_id = base::BuiltinTextureID::kTexturesSpinner1;
         break;
       case 2:
-        tex = base::BuiltinTextureOldID::kSpinner2;
+        tex_id = base::BuiltinTextureID::kTexturesSpinner2;
         break;
       case 3:
-        tex = base::BuiltinTextureOldID::kSpinner3;
+        tex_id = base::BuiltinTextureID::kTexturesSpinner3;
         break;
       case 4:
-        tex = base::BuiltinTextureOldID::kSpinner4;
+        tex_id = base::BuiltinTextureID::kTexturesSpinner4;
         break;
       case 5:
-        tex = base::BuiltinTextureOldID::kSpinner5;
+        tex_id = base::BuiltinTextureID::kTexturesSpinner5;
         break;
       case 6:
-        tex = base::BuiltinTextureOldID::kSpinner6;
+        tex_id = base::BuiltinTextureID::kTexturesSpinner6;
         break;
       case 7:
-        tex = base::BuiltinTextureOldID::kSpinner7;
+        tex_id = base::BuiltinTextureID::kTexturesSpinner7;
         break;
       case 8:
-        tex = base::BuiltinTextureOldID::kSpinner8;
+        tex_id = base::BuiltinTextureID::kTexturesSpinner8;
         break;
       case 9:
-        tex = base::BuiltinTextureOldID::kSpinner9;
+        tex_id = base::BuiltinTextureID::kTexturesSpinner9;
         break;
       case 10:
-        tex = base::BuiltinTextureOldID::kSpinner10;
+        tex_id = base::BuiltinTextureID::kTexturesSpinner10;
         break;
       default:
-        tex = base::BuiltinTextureOldID::kSpinner11;
+        tex_id = base::BuiltinTextureID::kTexturesSpinner11;
         break;
     }
-    c.SetTexture(g_base->assets->BuiltinTextureOld(tex));
   }
+  base::TextureAsset* tex = g_base->assets->BuiltinTexture(tex_id);
+
+  // Premultiply rgb by alpha for premultiplied textures so the spinner fades
+  // via 'over' compositing under premult blend instead of staying full-
+  // brightness (premult blend adds rgb directly rather than weighting it by
+  // alpha). Straight-alpha textures keep raw rgb and fade via alpha as before.
+  float amul = (tex != nullptr && tex->premultiplied())
+                   ? static_cast<float>(alpha)
+                   : 1.0f;
+
+  base::SimpleComponent c(pass);
+  c.SetTransparent(true);
+  c.SetColor(amul, amul, amul, alpha);
+  c.SetTexture(tex);
 
   {
     auto xf = c.ScopedTransform();
@@ -110,7 +120,7 @@ void SpinnerWidget::Draw(base::RenderPass* pass, bool draw_transparent) {
       c.Rotate(-360.0f * std::fmod(current_time * 2.0, 1.0), 0.0f, 0.0f, 1.0f);
     }
     c.DrawMeshAsset(
-        g_base->assets->BuiltinMeshOld(base::BuiltinMeshOldID::kImage1x1));
+        g_base->assets->BuiltinMesh(base::BuiltinMeshID::kMeshesImage1x1));
   }
   c.Submit();
 }

@@ -8,11 +8,9 @@ plus per-bucket manifest blobs in the CAS store
 the resolved ``logical_path → CAS hash`` mappings into the C++
 :class:`AssetPackageRegistry` via
 :func:`_babase.register_asset_package_bucket`, so subsequent
-``gettexture(``'apverid:asset'``)``-style lookups can resolve
+``aptextureget(``'apverid:asset'``)``-style lookups can resolve
 GIL-free in C++.
 """
-
-from __future__ import annotations
 
 import json
 import logging
@@ -26,20 +24,162 @@ if TYPE_CHECKING:
 
 _lifecyclelog = logging.getLogger('ba.lifecycle')
 
-# Apverids loaded by :func:`load_bundled_asset_packages` (one per
-# bundled package). Test/wrapper code that needs to construct a
-# qualified asset ref (``<apverid>:<asset>``) can read from here
-# rather than hard-coding the date-suffixed dev snapshot.
-_loaded_apverids: list[str] = []
+# Apverids of the BUILTIN (bundled) packages, populated at startup by
+# :func:`load_bundled_asset_packages` (one per bundled package).
+# Membership here means "builtin", which drives builtin-only resolve
+# semantics (bundled-fallback flavor; see ``AssetSubsystem._is_builtin``)
+# and qualified-ref construction -- so a runtime-resolved *non-builtin*
+# package must NOT land here (see ``_resolved_apverids``).
+_builtin_apverids: list[str] = []
+
+# Apverids of non-builtin packages brought in by a runtime resolve
+# (``babase.App.assets.resolve``). Tracked separately so the language
+# table merges their strings too WITHOUT making them count as builtin.
+_resolved_apverids: list[str] = []
+
+
+# Set once construct-mode has resolved every required asset-package (see
+# :func:`mark_construct_complete`). Until then, only the construct package
+# itself is legitimately loadable.
+_g_construct_complete = False
+
+# The construct/builtin package's apverid, cached on first check.
+_g_construct_apverid: str | None = None
+
+
+def mark_construct_complete() -> None:
+    """Note that construct-mode has finished resolving asset-packages.
+
+    Called from construct-mode's hand-off to the real app-mode -- the one
+    point at which every package the meta-scan requires is guaranteed
+    resolved and registered. Opens the gate enforced by
+    :func:`check_asset_package_load`.
+
+    Also opens the native gate
+    (``AssetPackageRegistry::CheckPreConstructAccess``), which covers the
+    load paths that never touch Python: direct C++ ``Assets::Get*``
+    calls, and scene_v1 wire traffic / replays arriving as legacy bare
+    names. Both open here so they cannot disagree about when bring-up
+    ended.
+    """
+    global _g_construct_complete  # pylint: disable=global-statement
+    _g_construct_complete = True
+    _babase.mark_construct_assets_complete()
+
+    # Logged because this is otherwise an invisible state change on a
+    # load-ordering invariant -- and because it is the only reliable
+    # marker that bring-up ended: the caller's own hand-off log is
+    # skipped on the no-deferred-intent path (headless), which made a
+    # test keyed on that line silently vacuous.
+    _lifecyclelog.debug('Construct-mode asset gate opened.')
+
+
+def construct_assets_complete() -> bool:
+    """Whether construct-mode has finished resolving asset-packages.
+
+    For callers that need to *avoid* doing something too early rather
+    than be scolded for it -- notably the dev console's AppModes tab,
+    which would otherwise exec app-mode modules (wrapper modules
+    included) while their packages are still unresolved.
+    """
+    return _g_construct_complete
+
+
+def check_asset_package_load(apverid: str, path: str) -> None:
+    """Flag an asset load from a package that is not up yet.
+
+    Before construct-mode hands off, the only package guaranteed
+    registered is the construct/builtin one; loading from any other is a
+    bug even when it happens to work. It works whenever the package is
+    *bundled* into this particular build (bundled packages register
+    during native bootstrapping, via
+    ``load_bundled_asset_packages()``), so the same code silently
+    succeeds or fails depending on the build's bundle profile -- and
+    headless never notices at all, since texture loads there
+    short-circuit before the package registry is consulted. Hence this
+    check keys on the construct package rather than on what is merely
+    registered.
+
+    Raises on debug builds so the offending call site fails loudly in
+    dev and CI; logs an error elsewhere. The underlying failure is worse
+    either way -- a dead ``on_app_loading`` hook, or an asset that goes
+    permanently ``kFailed`` and draws blank forever.
+
+    Hold the wrapper's *reference* and load it later (on first access,
+    once the ui that wants it exists) rather than loading at
+    construction time; see :class:`bascenev1.Level`.
+    """
+    if _g_construct_complete:
+        return
+
+    global _g_construct_apverid  # pylint: disable=global-statement
+    if _g_construct_apverid is None:
+        # Deferred: this module is imported while babase itself is still
+        # coming up, well before the wrapper is importable.
+        # pylint: disable-next=cyclic-import
+        from babase import builtinassets
+
+        _g_construct_apverid = builtinassets.__asset_package__
+
+    if apverid == _g_construct_apverid:
+        return
+
+    msg = (
+        f"Asset '{apverid}:{path}' loaded before construct-mode finished"
+        f' resolving asset-packages; only {_g_construct_apverid} is'
+        f' available this early. Hold the wrapper reference and load it'
+        f' on first use instead.'
+    )
+    # Keyed on debug-build, matching the native gate
+    # (``AssetPackageRegistry::CheckPreConstructAccess``) so the two
+    # cannot disagree about how loud to be. Note the *check* itself runs
+    # everywhere -- release builds log this error rather than skipping
+    # it; only the raise-vs-log severity varies.
+    if _babase.app.env.debug_build:
+        raise RuntimeError(msg)
+    _lifecyclelog.error(msg)
+
+
+def builtin_asset_package_apverids() -> list[str]:
+    """Apverids of the bundled/builtin packages (registered at startup).
+
+    The builtin-only set: drives ``_is_builtin`` (bundled-fallback resolve
+    semantics) and qualified-ref construction. Use
+    :func:`loaded_asset_package_apverids` instead for "every loaded
+    package" (e.g. rebuilding the language table).
+    """
+    return list(_builtin_apverids)
 
 
 def loaded_asset_package_apverids() -> list[str]:
-    """Return the list of apverids registered from the bundle.
+    """Return every currently-loaded apverid: builtin + runtime-resolved.
 
-    Populated by ``load_bundled_asset_packages`` at startup; empty
-    until the native bootstrapping handoff has run.
+    This is the set the native language table is rebuilt from (so every
+    loaded package's strings merge) and that a locale switch re-resolves.
+    Builtins are populated at startup by ``load_bundled_asset_packages``;
+    runtime-resolved packages are added by ``register_resolved_apverids``
+    after a successful ``resolve``. Distinct from
+    ``builtin_asset_package_apverids``, which alone must drive
+    builtin-only behavior.
     """
-    return list(_loaded_apverids)
+    out = list(_builtin_apverids)
+    out.extend(a for a in _resolved_apverids if a not in _builtin_apverids)
+    return out
+
+
+def register_resolved_apverids(apverids: list[str]) -> None:
+    """Record runtime-resolved (non-builtin) packages as loaded.
+
+    Called after a successful downloading/offline ``resolve`` commit so
+    :meth:`~babase.AssetSubsystem._reload_language` merges the package's
+    ``language`` bucket into the native table automatically (no caller-side
+    reload needed). Builtins are skipped (already loaded) and duplicates
+    ignored, so it's safe to pass the whole resolve batch.
+    """
+    for apverid in apverids:
+        if apverid in _builtin_apverids or apverid in _resolved_apverids:
+            continue
+        _resolved_apverids.append(apverid)
 
 
 def load_bundled_asset_packages() -> None:
@@ -74,9 +214,14 @@ def load_bundled_asset_packages() -> None:
     # the AssetSubsystem register the best-local flavor of each.
     apverids = [apverid for apverid, _ in _iter_manifest_packages(bundle)]
     for apverid in apverids:
-        if apverid not in _loaded_apverids:
-            _loaded_apverids.append(apverid)
+        if apverid not in _builtin_apverids:
+            _builtin_apverids.append(apverid)
     if apverids:
+        # resolve_local registers the packages' buckets (including
+        # ``language/<locale>``) and rebuilds the native language string
+        # table from them — so this is what actually populates the table
+        # at startup (the boot-time ``setlanguage`` may have run earlier,
+        # before any packages were loaded).
         _babase.app.assets.resolve_local(apverids)
 
 

@@ -3,8 +3,6 @@
 # pylint: disable=too-many-lines
 """Functionality related to the high level state of the app."""
 
-from __future__ import annotations
-
 import io
 import os
 import time
@@ -421,6 +419,22 @@ class App:
 
     # __FEATURESET_APP_SUBSYSTEM_PROPERTIES_END__
 
+    @property
+    def shutting_down(self) -> bool:
+        """Whether the app has begun (or completed) shutting down.
+
+        Becomes True once the app reaches
+        :attr:`~AppState.SHUTTING_DOWN` and remains True through
+        :attr:`~AppState.SHUTDOWN_COMPLETE`. Useful for long-running
+        async work that should bow out quietly instead of erroring when
+        app-level facilities (the threadpool, network, etc.) start
+        getting torn down out from under it.
+        """
+        return self.state in (
+            AppState.SHUTTING_DOWN,
+            AppState.SHUTDOWN_COMPLETE,
+        )
+
     def register_subsystem[T: AppSubsystem](self, subsystem: T) -> T:
         """Register an :class:`~babase.AppSubsystem` instance with the app.
 
@@ -747,7 +761,7 @@ class App:
 
     def handle_deep_link(self, url: str) -> None:
         """Handle a deep link URL."""
-        from babase._language import Lstr
+        from babase import builtinassets
 
         assert _babase.in_logic_thread()
 
@@ -759,7 +773,7 @@ class App:
         else:
             try:
                 _babase.screenmessage(
-                    Lstr(resource='errorText'), color=(1, 0, 0)
+                    builtinassets.strings.ui.error, color=(1, 0, 0)
                 )
                 _babase.getsimplesound('error').play()
             except ImportError:
@@ -992,10 +1006,10 @@ class App:
 
     def _display_set_intent_error(self, intent: AppIntent) -> None:
         """Show the *user* something went wrong setting an intent."""
-        from babase._language import Lstr
+        from babase import builtinassets
 
         del intent
-        _babase.screenmessage(Lstr(resource='errorText'), color=(1, 0, 0))
+        _babase.screenmessage(builtinassets.strings.ui.error, color=(1, 0, 0))
         _babase.getsimplesound('error').play()
 
     def _on_initing(self) -> None:

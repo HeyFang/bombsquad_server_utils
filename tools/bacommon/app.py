@@ -2,8 +2,6 @@
 #
 """Common high level values/functionality related to Ballistica apps."""
 
-from __future__ import annotations
-
 from enum import Enum
 from typing import TYPE_CHECKING
 
@@ -153,6 +151,13 @@ class AppVariant(Enum):
     #: Particular builds intended for public testing (may have some extra
     #: checks or logging enabled).
     TEST_BUILD = 'test_build'
+
+    #: Server bundles we distribute for third-party operators (such as
+    #: those on the ballistica.net downloads page).
+    SERVER = 'server'
+
+    #: Our own cloud-hosted game servers.
+    SERVER_BASN = 'server_basn'
 
     # Various stores.
     AMAZON_APPSTORE = 'amazon_appstore'

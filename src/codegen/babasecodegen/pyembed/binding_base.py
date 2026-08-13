@@ -2,12 +2,20 @@
 # Where most of our python-c++ binding happens.
 # Python objects should be added here along with their associated c++ enum.
 # pylint: disable=useless-suppression, missing-module-docstring, line-too-long
-from __future__ import annotations
 
 from bacommon.app import AppArchitecture, AppPlatform, AppVariant
 from babase._generated import enums
 
-from babase import _language, _apputils, _hooks, _env, _error, _general, _ui
+from babase import (
+    _language,
+    _apputils,
+    _hooks,
+    _env,
+    _error,
+    _general,
+    _ui,
+    _simpledialog,
+)
 
 # The C++ layer looks for this variable:
 values = [
@@ -17,8 +25,6 @@ values = [
     _hooks.set_config_fullscreen_on,  # kSetConfigFullscreenOnCall
     _hooks.set_config_fullscreen_off,  # kSetConfigFullscreenOffCall
     _hooks.not_signed_in_screen_message,  # kNotSignedInScreenMessageCall
-    _hooks.rejecting_invite_already_in_party_message,  # kRejectingInviteAlreadyInPartyMessageCall
-    _hooks.connection_failed_message,  # kConnectionFailedMessageCall
     _hooks.temporarily_unavailable_message,  # kTemporarilyUnavailableMessageCall
     _hooks.in_progress_message,  # kInProgressMessageCall
     _hooks.error_message,  # kErrorMessageCall
@@ -27,7 +33,6 @@ values = [
     _hooks.purchase_already_in_progress_error,  # kPurchaseAlreadyInProgressErrorCall
     _hooks.orientation_reset_cb_message,  # kVROrientationResetCBMessageCall
     _hooks.orientation_reset_message,  # kVROrientationResetMessageCall
-    _apputils.handle_v1_cloud_log,  # kHandleV1CloudLogCall
     _hooks.language_test_toggle,  # kLanguageTestToggleCall
     _hooks.award_in_control_achievement,  # kAwardInControlAchievementCall
     _hooks.award_dual_wielding_achievement,  # kAwardDualWieldingAchievementCall
@@ -67,7 +72,6 @@ values = [
     enums.InputType,  # kInputTypeClass
     enums.Permission,  # kPermissionClass
     enums.SpecialChar,  # kSpecialCharClass
-    _language.Lstr.from_json,  # kLstrFromJsonCall
     _hooks.hash_strings,  # kHashStringsCall
     _hooks.have_account_v2_credentials,  # kHaveAccountV2CredentialsCall
     _hooks.implicit_sign_in,  # kImplicitSignInCall
@@ -85,4 +89,5 @@ values = [
     _hooks.v2_auth_request,  # kV2AuthRequestCall
     _hooks.v2_auth_data,  # kV2AuthDataCall
     _hooks.start_native_repl,  # kStartNativeReplCall
+    _simpledialog.dispatch_button,  # kSimpleDialogButtonPressCall
 ]

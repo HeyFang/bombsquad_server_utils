@@ -184,8 +184,12 @@ static void DrawRect(RenderPass* pass, Mesh* mesh, float x, float y,
                      float alpha = 1.0f) {
   SimpleComponent c(pass);
   c.SetTransparent(true);
-  c.SetColor(bgcolor.x, bgcolor.y, bgcolor.z, alpha);
-  c.SetTexture(g_base->assets->BuiltinTextureOld(BuiltinTextureOldID::kCircle));
+  auto* tex = g_base->assets->BuiltinTexture(BuiltinTextureID::kTexturesCircle);
+  // Premultiply rgb by alpha for the premultiplied texture so faded rects
+  // composite 'over' correctly (see docs/design/premultiplied-alpha.md).
+  float cmul = tex->premultiplied() ? alpha : 1.0f;
+  c.SetColor(bgcolor.x * cmul, bgcolor.y * cmul, bgcolor.z * cmul, alpha);
+  c.SetTexture(tex);
   // Draw mesh bg.
   if (mesh) {
     auto xf = c.ScopedTransform();
@@ -204,7 +208,13 @@ static void DrawText(RenderPass* pass, TextGroup* tgrp, float tscale, float x,
     c.Translate(x, y, kDevConsoleZDepth);
     c.Scale(tscale, tscale, 1.0f);
     int elem_count = tgrp->GetElementCount();
-    c.SetColor(fgcolor.x, fgcolor.y, fgcolor.z, alpha);
+    // OS-rendered text-group textures are premultiplied-alpha; premultiply
+    // rgb by alpha so faded text composites 'over' correctly (see
+    // docs/design/premultiplied-alpha.md).
+    float cmul = (elem_count > 0 && tgrp->GetElementTexture(0)->premultiplied())
+                     ? alpha
+                     : 1.0f;
+    c.SetColor(fgcolor.x * cmul, fgcolor.y * cmul, fgcolor.z * cmul, alpha);
     c.SetFlatness(1.0f);
     for (int e = 0; e < elem_count; e++) {
       c.SetTexture(tgrp->GetElementTexture(e));
@@ -1407,7 +1417,7 @@ void DevConsole::CycleState(bool backwards) {
       g_base->logic->event_loop()->PushCall([this] { RefreshTabContents_(); });
     }
   }
-  g_base->audio->SafePlayBuiltinSoundOld(BuiltinSoundOldID::kBlip);
+  g_base->audio->SafePlayBuiltinSound(BuiltinSoundID::kAudioBlip);
   transition_start_ = g_base->logic->display_time();
 }
 
@@ -1550,9 +1560,12 @@ void DevConsole::Draw(FrameDef* frame_def) {
   {
     SimpleComponent c(pass);
     c.SetTransparent(true);
-    c.SetColor(0.03, 0, 0.09, 0.9f);
-    c.SetTexture(g_base->assets->BuiltinTextureOld(
-        BuiltinTextureOldID::kSoftRectVertical));
+    // kTexturesSoftRectVertical is premultiplied-alpha, so premultiply the
+    // modulate rgb by its alpha (0.9) to composite 'over' correctly (premult
+    // blend adds rgb directly rather than weighting it by alpha).
+    c.SetColor(0.03f * 0.9f, 0.0f, 0.09f * 0.9f, 0.9f);
+    c.SetTexture(g_base->assets->BuiltinTexture(
+        BuiltinTextureID::kTexturesSoftRectVertical));
     {
       auto scissor = c.ScopedScissor({0.0f, 0.0f, pass->virtual_width(),
                                       bottom - (border_height * 0.75f) * bs});
@@ -1560,7 +1573,7 @@ void DevConsole::Draw(FrameDef* frame_def) {
       c.Translate(pass->virtual_width() * 0.5f, bottom + 160.0f);
       c.Scale(pass->virtual_width() * 1.2f, 600.0f);
       c.DrawMeshAsset(
-          g_base->assets->BuiltinMeshOld(BuiltinMeshOldID::kImage1x1));
+          g_base->assets->BuiltinMesh(BuiltinMeshID::kMeshesImage1x1));
     }
   }
 
@@ -1573,7 +1586,10 @@ void DevConsole::Draw(FrameDef* frame_def) {
       SimpleComponent c(pass);
       c.SetFlatness(1.0f);
       c.SetTransparent(true);
-      c.SetColor(0.4f, 0.33f, 0.45f, 0.8f);
+      // OS-rendered text-group textures are premultiplied-alpha, so
+      // premultiply this faint (alpha 0.8) rgb ourselves so the build/title
+      // labels don't draw over-bright under premult blend.
+      c.SetColor(0.4f * 0.8f, 0.33f * 0.8f, 0.45f * 0.8f, 0.8f);
 
       // Build.
       int elem_count = built_text_group_.GetElementCount();
@@ -1639,8 +1655,13 @@ void DevConsole::Draw(FrameDef* frame_def) {
       SimpleComponent c(pass);
       c.SetTransparent(true);
       c.SetTexture(
-          g_base->assets->BuiltinTextureOld(BuiltinTextureOldID::kShadow));
-      c.SetColor(0.8, 0.0, 1.0, 0.3f);
+          g_base->assets->BuiltinTexture(BuiltinTextureID::kTexturesShadow));
+      // kTexturesShadow is now a premultiplied-alpha texture, so this draws
+      // with premult (additive) blend. Premultiply the modulate rgb by its
+      // alpha (0.3) so the glow keeps its original brightness instead of
+      // blowing out (premult-blend adds rgb directly rather than weighting it
+      // by alpha).
+      c.SetColor(0.8f * 0.3f, 0.0f * 0.3f, 1.0f * 0.3f, 0.3f);
       {
         auto xf = c.ScopedTransform();
         auto carat_x = GetCaratX_();
@@ -1649,8 +1670,8 @@ void DevConsole::Draw(FrameDef* frame_def) {
         c.Translate(carat_x, 0.0f, 0.0f);
         c.DrawMesh(carat_glow_mesh_.get());
       }
-      c.SetTexture(
-          g_base->assets->BuiltinTextureOld(BuiltinTextureOldID::kShadowSharp));
+      c.SetTexture(g_base->assets->BuiltinTexture(
+          BuiltinTextureID::kTexturesShadowSharp));
       c.SetColor(1.0, 1.0, 1.0, 1.0f);
       {
         auto xf = c.ScopedTransform();
@@ -1676,8 +1697,13 @@ void DevConsole::Draw(FrameDef* frame_def) {
       for (auto i = output_lines_.rbegin(); i != output_lines_.rend(); i++) {
         int elem_count = i->GetText().GetElementCount();
         for (int e = 0; e < elem_count; e++) {
-          c.SetColor(i->color.x, i->color.y, i->color.z, i->color.a);
-          c.SetTexture(i->GetText().GetElementTexture(e));
+          auto* tex = i->GetText().GetElementTexture(e);
+          // Premultiply rgb by alpha for premultiplied text textures so faded
+          // output lines don't draw over-bright.
+          float cmul = tex->premultiplied() ? i->color.a : 1.0f;
+          c.SetColor(i->color.x * cmul, i->color.y * cmul, i->color.z * cmul,
+                     i->color.a);
+          c.SetTexture(tex);
           {
             auto xf = c.ScopedTransform();
             c.Translate(h, v + 2, kDevConsoleZDepth);
@@ -1774,8 +1800,7 @@ auto DevConsole::PasteFromClipboard() -> bool {
           }
 
           if (strstr(text.c_str(), "\n") || strstr(text.c_str(), "\r")) {
-            g_base->audio->SafePlayBuiltinSoundOld(
-                BuiltinSoundOldID::kErrorBeep);
+            g_base->audio->SafePlayBuiltinSound(BuiltinSoundID::kAudioError);
             g_base->ScreenMessage("Can only paste single lines of text.",
                                   Vector3f(1.0f, 0.0f, 0.0f));
           } else {

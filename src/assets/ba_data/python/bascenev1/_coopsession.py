@@ -2,8 +2,6 @@
 #
 """Functionality related to coop-mode sessions."""
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING, override
 
 import babase
@@ -274,6 +272,7 @@ class CoopSession(Session):
         from bascenev1lib.activity.coopscore import CoopScoreScreen
         from bascenev1lib.tutorial import TutorialActivity
 
+        from bascenev1 import _commonassets
         from bascenev1._gameresults import GameResults
         from bascenev1._player import PlayerInfo
         from bascenev1._activitytypes import JoinActivity, TransitionActivity
@@ -355,7 +354,7 @@ class CoopSession(Session):
                     ):
                         self._custom_menu_ui = [
                             {
-                                'label': babase.Lstr(resource='restartText'),
+                                'label': _commonassets.strings.actions.restart,
                                 'resume_on_call': False,
                                 'call': babase.WeakCallPartial(
                                     self._on_tournament_restart_menu_press
@@ -365,7 +364,7 @@ class CoopSession(Session):
                     else:
                         self._custom_menu_ui = [
                             {
-                                'label': babase.Lstr(resource='restartText'),
+                                'label': _commonassets.strings.actions.restart,
                                 'call': babase.WeakCallStrict(self.restart),
                             }
                         ]
@@ -400,8 +399,7 @@ class CoopSession(Session):
                         else:
                             raise RuntimeError('FIXME')
                 else:
-                    if results.scoretype is not ScoreType.POINTS:
-                        print(f'Unknown ScoreType:' f' "{results.scoretype}"')
+                    assert results.scoretype is ScoreType.POINTS
                     scoretype = 'points'
 
             # Old coop-game-specific results; should migrate away from these.

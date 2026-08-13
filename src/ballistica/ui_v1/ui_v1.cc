@@ -9,6 +9,7 @@
 #include "ballistica/base/graphics/component/empty_component.h"
 #include "ballistica/base/input/input.h"
 #include "ballistica/base/support/app_config.h"
+#include "ballistica/base/ui/ui.h"
 #include "ballistica/core/core.h"
 #include "ballistica/core/logging/logging.h"
 #include "ballistica/core/logging/logging_macros.h"
@@ -118,7 +119,7 @@ void UIV1FeatureSet::Draw(base::FrameDef* frame_def) {
     g_base->graphics->set_drawing_opaque_only(true);
 
     // Do a wee bit of shifting based on tilt just for fun.
-    Vector3f tilt = 0.1f * g_base->graphics->tilt();
+    Vector3f tilt = 0.1f * g_base->input->tilt();
     {
       base::EmptyComponent c(overlay_flat_pass);
       c.SetTransparent(false);
@@ -294,10 +295,19 @@ void UIV1FeatureSet::OnLanguageChange() {
   // notifications go out anytime the ui-delegate switches.
   auto asset_language_state = g_base->assets->language_state();
   if (asset_language_state != language_state_) {
+    g_core->logging->Log(LogName::kBaAssets, LogLevel::kDebug,
+                         "ui-v1 OnLanguageChange: firing (state "
+                             + std::to_string(language_state_) + " -> "
+                             + std::to_string(asset_language_state) + ").");
     language_state_ = asset_language_state;
     if (auto* r = root_widget()) {
       r->OnLanguageChange();
     }
+  } else {
+    g_core->logging->Log(LogName::kBaAssets, LogLevel::kDebug,
+                         "ui-v1 OnLanguageChange: skipping (state "
+                             + std::to_string(language_state_)
+                             + " unchanged).");
   }
 }
 
@@ -315,7 +325,16 @@ void UIV1FeatureSet::DeleteWidget(Widget* widget) {
   if (widget) {
     ContainerWidget* parent = widget->parent_widget();
     if (parent) {
+      // Widget death can trigger user code (on-delete callbacks), which
+      // gets scheduled on the current ui-operation. Establish one for
+      // the duration: this func is invoked via bare event-loop pushcalls
+      // (transition-out completions) where none is otherwise active, and
+      // without one those callbacks get dropped with an error. Harmlessly
+      // defers to any operation already in progress.
+      base::UI::OperationContext operation_context;
       parent->DeleteWidget(widget);
+      // Run anything we triggered.
+      operation_context.Finish();
     }
   }
 }

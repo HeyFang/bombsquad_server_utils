@@ -15,13 +15,12 @@ import the real runtime Python under
 ``inspect.getmembers``.
 """
 
-from __future__ import annotations
-
 import os
 import sys
 import ast
 import json
 import inspect
+import annotationlib
 import subprocess
 import importlib
 from typing import TYPE_CHECKING
@@ -208,6 +207,18 @@ def _worker_main(outpath: str) -> None:
             # doesn't chain into a dead pointer. ``detail`` still
             # shows the annotation.
             del entry['type_qual']
+
+    # Tag each entry with its completion 'group' (layer) so consumers
+    # can compose per-workspace-type subsets: 'ballistica' for the
+    # game-API modules, 'stdlib' for the curated standard-library set.
+    # Classified by top-level root module — _RUNTIME_MODULES and
+    # _STDLIB_MODULES never share a root, so this is unambiguous, and
+    # since those two lists are the only things walked, every entry's
+    # root falls in one of them.
+    _runtime_roots = {m.split('.', 1)[0] for m in _RUNTIME_MODULES}
+    for entry in entries:
+        root = entry['label'].split('.', 1)[0]
+        entry['group'] = 'ballistica' if root in _runtime_roots else 'stdlib'
 
     # Stable order so JSON diffs are reviewable when this is checked
     # into bamaster.
@@ -429,14 +440,19 @@ def _emit_class_members(
         if entry is not None:
             out.append(entry)
 
-    # Class-level annotations. PEP 563 (``from __future__ import
-    # annotations``) is used throughout the tree, so values here
-    # are already strings. Skip non-string values defensively.
-    annotations = getattr(cls, '__annotations__', None) or {}
+    # Class-level annotations. Under PEP 649 (deferred annotations,
+    # the 3.14+ default) raw ``__annotations__`` values are objects,
+    # so explicitly ask annotationlib for the string form (this also
+    # gracefully handles annotations whose names can't resolve at
+    # runtime, e.g. TYPE_CHECKING-only imports).
+    try:
+        annotations = annotationlib.get_annotations(
+            cls, format=annotationlib.Format.STRING
+        )
+    except Exception:
+        annotations = {}
     for name, ann in annotations.items():
         if _should_skip(name) or name in seen:
-            continue
-        if not isinstance(ann, str):
             continue
         seen.add(name)
         out.append(
@@ -482,7 +498,7 @@ def _emit_class_instance_attrs(
     try:
         with open(srcfile, encoding='utf-8') as infile:
             tree = ast.parse(infile.read())
-    except (OSError, SyntaxError):
+    except OSError, SyntaxError:
         return
 
     # Resolve the class node by walking the qualname path. Handles
@@ -614,13 +630,18 @@ def _build_entry(qualname: str, value: object) -> dict[str, Any] | None:
 def _property_return_annotation(prop: property) -> str | None:
     """Extract a property's getter return annotation, if any.
 
-    Uses ``__future__`` annotations semantics so values come back
-    as strings; nothing to ``eval``.
+    Asks annotationlib for PEP 649 STRING format so we get the
+    source-ish text form without needing to ``eval`` anything.
     """
     fget = prop.fget
     if fget is None:
         return None
-    ann = getattr(fget, '__annotations__', None)
+    try:
+        ann = annotationlib.get_annotations(
+            fget, format=annotationlib.Format.STRING
+        )
+    except Exception:
+        return None
     if not ann:
         return None
     ret = ann.get('return')
@@ -647,11 +668,18 @@ def _format_detail_module(qualname: str) -> str:
 
 
 def _format_detail_callable(qualname: str, value: object) -> str:
+    # Ask for PEP 649 STRING format so annotations whose names can't
+    # resolve at runtime (e.g. TYPE_CHECKING-only imports) don't blow
+    # up signature evaluation; unquote so the detail reads like source.
     try:
-        sig = inspect.signature(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
+        sig = inspect.signature(
+            value,  # type: ignore[arg-type]
+            annotation_format=annotationlib.Format.STRING,
+        )
+    except TypeError, ValueError:
         return qualname
-    return f"{qualname.rsplit('.', 1)[-1]}{sig}"
+    sigstr = sig.format(quote_annotation_strings=False)
+    return f"{qualname.rsplit('.', 1)[-1]}{sigstr}"
 
 
 def _short_doc(value: object) -> str:

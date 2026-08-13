@@ -2,12 +2,15 @@
 
 #include "ballistica/base/input/input.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <string>
 #include <vector>
 
 #include "ballistica/base/app_adapter/app_adapter.h"
 #include "ballistica/base/app_mode/app_mode.h"
+#include "ballistica/base/assets/builtin_strings.h"
 #include "ballistica/base/audio/audio.h"
 #include "ballistica/base/graphics/graphics.h"
 #include "ballistica/base/graphics/support/camera.h"
@@ -16,6 +19,7 @@
 #include "ballistica/base/input/device/touch_input.h"
 #include "ballistica/base/logic/logic.h"
 #include "ballistica/base/python/base_python.h"
+#include "ballistica/base/support/app_config.h"
 #include "ballistica/base/ui/dev_console.h"
 #include "ballistica/base/ui/ui.h"
 #include "ballistica/core/platform/platform.h"
@@ -144,34 +148,30 @@ void Input::AnnounceConnects_() {
 
     // If there's been several connected, just give a number.
     if (newly_connected_controllers_.size() > 1) {
-      std::string s =
-          g_base->assets->GetResourceString("controllersDetectedText");
-      Utils::StringReplaceOne(
-          &s, "${COUNT}", std::to_string(newly_connected_controllers_.size()));
-      g_base->ScreenMessage(s);
+      g_base->ScreenMessage(
+          BuiltinStrings::Input::ControllersDetected(
+              static_cast<int64_t>(newly_connected_controllers_.size()))
+              ->Evaluate());
     } else {
       g_base->ScreenMessage(
-          g_base->assets->GetResourceString("controllerDetectedText"));
+          BuiltinStrings::Input::ControllerDetected()->Evaluate());
     }
 
   } else {
     // If there's been several connected, just give a number.
     if (newly_connected_controllers_.size() > 1) {
-      std::string s =
-          g_base->assets->GetResourceString("controllersConnectedText");
-      Utils::StringReplaceOne(
-          &s, "${COUNT}", std::to_string(newly_connected_controllers_.size()));
-      g_base->ScreenMessage(s);
+      g_base->ScreenMessage(
+          BuiltinStrings::Input::ControllersConnected(
+              static_cast<int64_t>(newly_connected_controllers_.size()))
+              ->Evaluate());
     } else {
       // If its just one, give its name.
-      std::string s =
-          g_base->assets->GetResourceString("controllerConnectedText");
-      Utils::StringReplaceOne(&s, "${CONTROLLER}",
-                              newly_connected_controllers_.front());
-      g_base->ScreenMessage(s);
+      g_base->ScreenMessage(BuiltinStrings::Input::ControllerConnected(
+                                newly_connected_controllers_.front())
+                                ->Evaluate());
     }
     if (g_base->assets->sys_assets_loaded()) {
-      g_base->audio->SafePlayBuiltinSoundOld(BuiltinSoundOldID::kGunCock);
+      g_base->audio->SafePlayBuiltinSound(BuiltinSoundID::kAudioGunCocking);
     }
   }
   newly_connected_controllers_.clear();
@@ -180,21 +180,18 @@ void Input::AnnounceConnects_() {
 void Input::AnnounceDisconnects_() {
   // If there's been several connected, just give a number.
   if (newly_disconnected_controllers_.size() > 1) {
-    std::string s =
-        g_base->assets->GetResourceString("controllersDisconnectedText");
-    Utils::StringReplaceOne(
-        &s, "${COUNT}", std::to_string(newly_disconnected_controllers_.size()));
-    g_base->ScreenMessage(s);
+    g_base->ScreenMessage(
+        BuiltinStrings::Input::ControllersDisconnected(
+            static_cast<int64_t>(newly_disconnected_controllers_.size()))
+            ->Evaluate());
   } else {
     // If its just one, name it.
-    std::string s =
-        g_base->assets->GetResourceString("controllerDisconnectedText");
-    Utils::StringReplaceOne(&s, "${CONTROLLER}",
-                            newly_disconnected_controllers_.front());
-    g_base->ScreenMessage(s);
+    g_base->ScreenMessage(BuiltinStrings::Input::ControllerDisconnected(
+                              newly_disconnected_controllers_.front())
+                              ->Evaluate());
   }
   if (g_base->assets->sys_assets_loaded()) {
-    g_base->audio->SafePlayBuiltinSoundOld(BuiltinSoundOldID::kCorkPop);
+    g_base->audio->SafePlayBuiltinSound(BuiltinSoundID::kAudioCorkPop);
   }
 
   newly_disconnected_controllers_.clear();
@@ -504,6 +501,18 @@ auto Input::GetInputDevicesWithName(const std::string& name)
   return vals;
 }
 
+auto Input::GetInputDevices() -> std::vector<InputDevice*> {
+  assert(g_base->InLogicThread());
+  std::vector<InputDevice*> vals;
+  vals.reserve(input_devices_.size());
+  for (auto& input_device : input_devices_) {
+    if (input_device.exists()) {
+      vals.push_back(input_device.get());
+    }
+  }
+  return vals;
+}
+
 auto Input::GetConfigurableGameControllers() -> std::vector<InputDevice*> {
   assert(g_base->InLogicThread());
   std::vector<InputDevice*> vals;
@@ -534,9 +543,23 @@ void Input::OnAppStart() {
   }
 }
 
-void Input::OnAppSuspend() { assert(g_base->InLogicThread()); }
+void Input::OnAppSuspend() {
+  assert(g_base->InLogicThread());
+  SetGyroEnabled(false);
 
-void Input::OnAppUnsuspend() { assert(g_base->InLogicThread()); }
+  // Never leave a motor running while we're backgrounded; nothing will be
+  // around to end it and it burns the user's battery until they notice.
+  for (auto& input_device : input_devices_) {
+    if (input_device.exists()) {
+      input_device->StopFeedback();
+    }
+  }
+}
+
+void Input::OnAppUnsuspend() {
+  assert(g_base->InLogicThread());
+  SetGyroEnabled(true);
+}
 
 void Input::OnAppShutdown() { assert(g_base->InLogicThread()); }
 
@@ -558,6 +581,10 @@ void Input::ApplyAppConfig() {
 
   // Some config settings can affect this.
   UpdateInputDeviceCounts_();
+
+  // Device-motion tilt toggle ('Disable Camera Gyro' in advanced settings).
+  camera_gyro_explicitly_disabled_ =
+      g_base->app_config->Resolve(AppConfig::BoolID::kDisableCameraGyro);
 }
 
 void Input::OnScreenSizeChange() { assert(g_base->InLogicThread()); }
@@ -1022,7 +1049,8 @@ void Input::HandleKeyPress_(const BAKeysym& keysym) {
   switch (keysym.sym) {
       // Menu button on android/etc. pops up the menu.
     case BAK_MENU: {
-      if (!g_base->ui->IsMainUIVisible()) {
+      if (!g_base->ui->IsMainUIVisible()
+          && !g_base->ui->HasModalSimpleDialog()) {
         g_base->ui->RequestMainUI(GetFuzzyInputDeviceForMenuButton());
       }
       handled = true;
@@ -1080,11 +1108,14 @@ void Input::HandleKeyPress_(const BAKeysym& keysym) {
       break;
 
     case BAK_ESCAPE:
-      if (!g_base->ui->IsMainUIVisible()) {
+      if (!g_base->ui->IsMainUIVisible()
+          && !g_base->ui->HasModalSimpleDialog()) {
         // There's no main menu up. Ask for one.
         g_base->ui->RequestMainUI(GetFuzzyInputDeviceForEscapeKey());
       } else {
-        // Ok there *is* a main ui up. Send it a cancel message.
+        // Ok there *is* a main ui up (or a modal SimpleDialog). Send a cancel
+        // message -- a modal SimpleDialog swallows it; otherwise the main ui
+        // handles it.
         g_base->ui->SendWidgetMessage(
             WidgetMessage(WidgetMessage::Type::kCancel));
       }
@@ -1490,10 +1521,6 @@ void Input::HandleTouchEvent_(const TouchEvent& e) {
     return;
   }
 
-  if (g_buildconfig.platform_ios_tvos()) {
-    printf("FIXME: update touch handling\n");
-  }
-
   float x = g_base->graphics->PixelToVirtualX(
       e.x * g_base->graphics->screen_pixel_width());
   float y = g_base->graphics->PixelToVirtualY(
@@ -1544,6 +1571,87 @@ void Input::HandleTouchEvent_(const TouchEvent& e) {
   // If we've got a touch input device, forward events along to it.
   if (touch_input_) {
     touch_input_->HandleTouchEvent(e.type, e.touch, x, y);
+  }
+}
+
+void Input::PushGyroEvent(const Vector3f& vals) {
+  assert(g_base->logic->event_loop());
+  auto* loop{g_base->logic->event_loop()};
+  if (loop->CheckPushSafety()) {
+    loop->PushCall([vals, this] { HandleGyroEvent_(vals); });
+  }
+}
+
+void Input::HandleGyroEvent_(const Vector3f& vals) {
+  assert(g_base->InLogicThread());
+  // Just stash the latest sample; UpdateGyro() integrates it each frame.
+  gyro_vals_ = vals;
+}
+
+void Input::SetGyroEnabled(bool enable) {
+  assert(g_base->InLogicThread());
+  // If we're turning back on, suppress gyro updates for a bit to avoid a
+  // hitch from a stale accumulated sample.
+  if (enable && !gyro_enabled_) {
+    last_suppress_gyro_time_ = g_core->AppTimeMicrosecs();
+  }
+  gyro_enabled_ = enable;
+}
+
+void Input::UpdateGyro(microsecs_t time_microsecs,
+                       microsecs_t elapsed_microsecs) {
+  assert(g_base->InLogicThread());
+  Vector3f tilt = gyro_vals_;
+
+  millisecs_t elapsed_millisecs = elapsed_microsecs / 1000;
+
+  // Guard against bad sensor data (and historically against torn reads from
+  // a cross-thread write; samples now arrive on the logic thread via
+  // PushGyroEvent, but the sanitize is cheap insurance against wonky gyros).
+  for (float& i : tilt.v) {
+    // Check for NaN and Inf:
+    if (!std::isfinite(i)) {
+      i = 0.0f;
+    }
+
+    // Clamp crazy big values:
+    i = std::min(100.0f, std::max(-100.0f, i));
+  }
+
+  // Our math was calibrated for 60hz (16ms per frame);
+  // adjust for other framerates...
+  float timescale = static_cast<float>(elapsed_millisecs) / 16.0f;
+
+  // If we've recently been told to suppress the gyro, zero these.
+  // (prevents hitches when being restored, etc)
+  if (!gyro_enabled_ || camera_gyro_explicitly_disabled_
+      || (time_microsecs - last_suppress_gyro_time_ < 1000000)) {
+    tilt = Vector3f{0.0, 0.0, 0.0};
+  }
+
+  float tilt_smoothing = 0.0f;
+  tilt_smoothed_ =
+      tilt_smoothing * tilt_smoothed_ + (1.0f - tilt_smoothing) * tilt;
+
+  tilt_vel_ = tilt_smoothed_ * 3.0f;
+  tilt_pos_ += tilt_vel_ * timescale;
+
+  // Technically this will behave slightly differently at different time
+  // scales, but it should be close to correct.. tilt_pos_ *= 0.991f;
+  tilt_pos_ *= std::max(0.0f, 1.0f - 0.01f * timescale);
+
+  // Some gyros seem wonky and either give us crazy big values or consistently
+  // offset ones. Let's keep a running tally of magnitude that slowly drops
+  // over time, and if it reaches a certain value lets just kill gyro input.
+  if (gyro_broken_) {
+    tilt_pos_ *= 0.0f;
+  } else {
+    gyro_mag_test_ += tilt_vel_.Length() * 0.01f * timescale;
+    gyro_mag_test_ = std::max(0.0f, gyro_mag_test_ - 0.02f * timescale);
+    if (gyro_mag_test_ > 100.0f) {
+      g_base->ScreenMessage("Wonky gyro; disabling tilt.", {1, 0, 0});
+      gyro_broken_ = true;
+    }
   }
 }
 

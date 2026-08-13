@@ -4,10 +4,9 @@
 
 #include <set>
 #include <string>
-#include <unordered_set>
 #include <vector>
 
-#include "ballistica/base/assets/assets.h"
+#include "ballistica/base/assets/builtin_strings.h"
 #include "ballistica/base/networking/network_reader.h"
 #include "ballistica/base/python/base_python.h"
 #include "ballistica/classic/support/classic_app_mode.h"
@@ -322,8 +321,8 @@ static PyMethodDef PySetAuthenticateClientsDef = {
 
 // ------------------------------- set_admins ----------------------------------
 
-static auto PySetAdmins(PyObject* self, PyObject* args,
-                        PyObject* keywds) -> PyObject* {
+static auto PySetAdmins(PyObject* self, PyObject* args, PyObject* keywds)
+    -> PyObject* {
   BA_PYTHON_TRY;
   PyObject* admins_obj;
   static const char* kwlist[] = {"admins", nullptr};
@@ -354,70 +353,77 @@ static PyMethodDef PySetAdminsDef = {
     "(internal)",
 };
 
-// --------------------------- set_admin_tokens ------------------------------
+// ----------------------- set_hosting_asset_packages --------------------------
 
-static auto PySetAdminTokens(PyObject* self, PyObject* args,
-                             PyObject* keywds) -> PyObject* {
+static auto PySetHostingAssetPackages(PyObject* self, PyObject* args,
+                                      PyObject* keywds) -> PyObject* {
   BA_PYTHON_TRY;
-  PyObject* tokens_obj;
-  static const char* kwlist[] = {"tokens", nullptr};
+  PyObject* packages_obj;
+  static const char* kwlist[] = {"packages", nullptr};
   if (!PyArg_ParseTupleAndKeywords(args, keywds, "O",
-                                   const_cast<char**>(kwlist), &tokens_obj)) {
+                                   const_cast<char**>(kwlist), &packages_obj)) {
     return nullptr;
   }
   auto* appmode = classic::ClassicAppMode::GetActiveOrThrow();
-
-  // This part is different: we use the admin_tokens_ variable.
-  // We're converting a Python list of strings to a C++ set of strings.
-  auto tokens = Python::GetStrings(tokens_obj);
-  std::unordered_set<std::string> tokenset;
-  for (auto&& token : tokens) {
-    tokenset.insert(token);
-  }
-  appmode->set_admin_tokens(tokenset);  // We'll need to create this setter.
-
+  appmode->SetHostingAssetPackages(Python::GetStrings(packages_obj));
   Py_RETURN_NONE;
   BA_PYTHON_CATCH;
 }
 
-static PyMethodDef PySetAdminTokensDef = {
-    "set_admin_tokens",             // name
-    (PyCFunction)PySetAdminTokens,  // method
-    METH_VARARGS | METH_KEYWORDS,   // flags
-    "set_admin_tokens(tokens: list[str]) -> None\n"
+static PyMethodDef PySetHostingAssetPackagesDef = {
+    "set_hosting_asset_packages",            // name
+    (PyCFunction)PySetHostingAssetPackages,  // method
+    METH_VARARGS | METH_KEYWORDS,            // flags
+
+    "set_hosting_asset_packages(packages: list[str]) -> None\n"
     "\n"
-    "(internal)",
+    "Set the asset-package-versions this app run hosts with.\n"
+    "\n"
+    "This should be the launch metascan snapshot (the app's hosting\n"
+    "package universe; see asset-packages.md decision #36). Advertised\n"
+    "to LAN scanners in v2 host-query responses.\n"
+    "\n"
+    "(internal)\n"
+    "\n"
+    ":meta private:",
 };
 
-// ------------------------ set_enable_admins_kick ---------------------------
+// --------------------------- set_host_password -------------------------------
 
-static auto PySetEnableAdminsKick(PyObject* self, PyObject* args,
-                                  PyObject* keywds) -> PyObject* {
+static auto PySetHostPassword(PyObject* self, PyObject* args, PyObject* keywds)
+    -> PyObject* {
   BA_PYTHON_TRY;
-  int enable;
-  static const char* kwlist[] = {"enable", nullptr};
-  if (!PyArg_ParseTupleAndKeywords(args, keywds, "p",
-                                   const_cast<char**>(kwlist), &enable)) {
+  PyObject* password_obj;
+  static const char* kwlist[] = {"password", nullptr};
+  if (!PyArg_ParseTupleAndKeywords(args, keywds, "O",
+                                   const_cast<char**>(kwlist), &password_obj)) {
     return nullptr;
   }
-  assert(g_base->logic);
-
-  if (auto* appmode{classic::ClassicAppMode::GetActiveOrWarn()}) {
-    appmode->set_admins_kick_enabled(static_cast<bool>(enable));
+  auto* appmode = classic::ClassicAppMode::GetActiveOrThrow();
+  std::string password;
+  if (password_obj != Py_None) {
+    password = Python::GetString(password_obj);
   }
-
+  appmode->SetHostPassword(password);
   Py_RETURN_NONE;
   BA_PYTHON_CATCH;
 }
 
-static PyMethodDef PySetEnableAdminsKickDef = {
-    "set_enable_admins_kick",            // name
-    (PyCFunction)PySetEnableAdminsKick,  // method
-    METH_VARARGS | METH_KEYWORDS,        // flags
+static PyMethodDef PySetHostPasswordDef = {
+    "set_host_password",             // name
+    (PyCFunction)PySetHostPassword,  // method
+    METH_VARARGS | METH_KEYWORDS,    // flags
 
-    "set_enable_admins_kick(enable: bool) -> None\n"
+    "set_host_password(password: str | None) -> None\n"
     "\n"
-    "(internal)",
+    "Set the password clients must provide to join us.\n"
+    "\n"
+    "Pass None or an empty string for no password. Advertised (as a\n"
+    "required-flag only) in pre-join requirements-query responses.\n"
+    "\n"
+    "(internal)\n"
+    "\n"
+    ":meta private:",
 };
 
 // --------------------- set_enable_default_kick_voting ------------------------
@@ -453,8 +459,8 @@ static PyMethodDef PySetEnableDefaultKickVotingDef = {
 
 // --------------------------- connect_to_party --------------------------------
 
-static auto PyConnectToParty(PyObject* self, PyObject* args,
-                             PyObject* keywds) -> PyObject* {
+static auto PyConnectToParty(PyObject* self, PyObject* args, PyObject* keywds)
+    -> PyObject* {
   BA_PYTHON_TRY;
   std::string address;
   PyObject* address_obj;
@@ -465,11 +471,18 @@ static auto PyConnectToParty(PyObject* self, PyObject* args,
   // be printed and most connection attempts will be silent todo: could
   // generalize this to pass all results to a callback instead
   int print_progress = 1;
-  static const char* kwlist[] = {"address", "port", "print_progress", nullptr};
-  if (!PyArg_ParseTupleAndKeywords(args, keywds, "O|ip",
-                                   const_cast<char**>(kwlist), &address_obj,
-                                   &port, &print_progress)) {
+  PyObject* password_obj{Py_None};
+  int prepped = 0;
+  static const char* kwlist[] = {"address",  "port",    "print_progress",
+                                 "password", "prepped", nullptr};
+  if (!PyArg_ParseTupleAndKeywords(
+          args, keywds, "O|ipOp", const_cast<char**>(kwlist), &address_obj,
+          &port, &print_progress, &password_obj, &prepped)) {
     return nullptr;
+  }
+  std::string password;
+  if (password_obj != Py_None) {
+    password = Python::GetString(password_obj);
   }
 
   // Error if we're not in our app-mode.
@@ -494,8 +507,7 @@ static auto PyConnectToParty(PyObject* self, PyObject* args,
     }
   } catch (const std::exception&) {
     g_base->ScreenMessage(
-        g_base->assets->GetResourceString("invalidAddressErrorText"),
-        {1, 0, 0});
+        base::BuiltinStrings::Net::InvalidAddress()->Evaluate(), {1, 0, 0});
     Py_RETURN_NONE;
   }
   g_core->logging->Log(LogName::kBaNetworking, LogLevel::kDebug, [&s] {
@@ -503,7 +515,8 @@ static auto PyConnectToParty(PyObject* self, PyObject* args,
            + ":" + std::to_string(s.Port()) + ".";
   });
   appmode->connections()->PushHostConnectedUDPCall(
-      s, static_cast<bool>(print_progress));
+      s, static_cast<bool>(print_progress), password,
+      static_cast<bool>(prepped));
   Py_RETURN_NONE;
   BA_PYTHON_CATCH;
 }
@@ -514,7 +527,8 @@ static PyMethodDef PyConnectToPartyDef = {
     METH_VARARGS | METH_KEYWORDS,   // flags
 
     "connect_to_party(address: str, port: int | None = None,\n"
-    "  print_progress: bool = True) -> None\n"
+    "  print_progress: bool = True, password: str | None = None,\n"
+    "  prepped: bool = False) -> None\n"
     "\n"
     "(internal)",
 };
@@ -668,8 +682,8 @@ static PyMethodDef PyDisconnectFromHostDef = {
 
 // --------------------------- disconnect_client -------------------------------
 
-static auto PyDisconnectClient(PyObject* self, PyObject* args,
-                               PyObject* keywds) -> PyObject* {
+static auto PyDisconnectClient(PyObject* self, PyObject* args, PyObject* keywds)
+    -> PyObject* {
   BA_PYTHON_TRY;
   int client_id;
   int ban_time = 300;  // Old default before we exposed this.
@@ -750,61 +764,6 @@ static PyMethodDef PyGetClientPublicDeviceUUIDDef = {
     "periodically with updates to the game or operating system.",
 };
 
-// ----------------------- get_client_ip_address -----------------------------
-
-static PyObject* PyGetClientIPAddress(PyObject* self, PyObject* args,
-                                      PyObject* keywds) {
-  BA_PYTHON_TRY;
-  int client_id;
-  static const char* kwlist[] = {"client_id", nullptr};
-  if (!PyArg_ParseTupleAndKeywords(args, keywds, "i",
-                                   const_cast<char**>(kwlist), &client_id)) {
-    return nullptr;
-  }
-  // Error if we're not in our app-mode.
-  auto* appmode = classic::ClassicAppMode::GetActiveOrThrow();
-
-  // Find the connection associated with the client_id
-  auto&& connection_iter{
-      appmode->connections()->connections_to_clients().find(client_id)};
-
-  // Does this connection exist?
-  if (connection_iter
-      == appmode->connections()->connections_to_clients().end()) {
-    Py_RETURN_NONE;  // No connection found for this client_id
-  }
-
-  // Connections should always be valid refs.
-  assert(connection_iter->second.exists());
-  ConnectionToClient* connection =
-      connection_iter->second.get();  // Get the raw pointer
-
-  // Call the C++ method we added earlier
-  std::string ip_address = connection->GetClientIPAddress();
-
-  // Return the result as a Python string, or None if empty/NA
-  if (ip_address.empty() || ip_address == "N/A") {
-    Py_RETURN_NONE;
-  } else {
-    return PyUnicode_FromString(ip_address.c_str());
-  }
-
-  BA_PYTHON_CATCH;
-}
-
-static PyMethodDef PyGetClientIPAddressDef = {
-    "get_client_ip_address",            // name
-    (PyCFunction)PyGetClientIPAddress,  // method
-    METH_VARARGS | METH_KEYWORDS,       // flags
-
-    "get_client_ip_address(client_id: int) -> str | None\n"
-    "\n"
-    "(internal)\n"
-    "\n"
-    "Return the IP address string for a connected client.\n"
-    "Returns None if the client_id is invalid or the IP cannot be determined.",
-};
-
 // ----------------------- get_client_ping -----------------------------
 
 static PyObject* PyGetClientPing(PyObject* self, PyObject* args,
@@ -877,8 +836,8 @@ static PyMethodDef PyGetGamePortDef = {
 
 // ------------------------ set_master_server_source ---------------------------
 
-static auto PySetMasterServerSource(PyObject* self,
-                                    PyObject* args) -> PyObject* {
+static auto PySetMasterServerSource(PyObject* self, PyObject* args)
+    -> PyObject* {
   BA_PYTHON_TRY;
   int source;
   if (!PyArg_ParseTuple(args, "i", &source)) return nullptr;
@@ -904,8 +863,8 @@ static PyMethodDef PySetMasterServerSourceDef = {
 
 // ----------------------------- host_scan_cycle -------------------------------
 
-static auto PyHostScanCycle(PyObject* self, PyObject* args,
-                            PyObject* keywds) -> PyObject* {
+static auto PyHostScanCycle(PyObject* self, PyObject* args, PyObject* keywds)
+    -> PyObject* {
   BA_PYTHON_TRY;
   auto* appmode = classic::ClassicAppMode::GetActiveOrThrow();
   appmode->HostScanCycle();
@@ -913,9 +872,19 @@ static auto PyHostScanCycle(PyObject* self, PyObject* args,
       appmode->GetScanResults();
   PyObject* py_list = PyList_New(0);
   for (auto&& i : results) {
-    PyList_Append(py_list, Py_BuildValue("{ssss}", "display_string",
-                                         i.display_string.c_str(), "address",
-                                         i.address.c_str()));
+    PyObject* py_dict =
+        Py_BuildValue("{ss ss sO ss si si sO si si}",              // format
+                      "display_string", i.display_string.c_str(),  //
+                      "address", i.address.c_str(),                //
+                      "has_v2", i.has_v2 ? Py_True : Py_False,     //
+                      "party_name", i.party_name.c_str(),          //
+                      "party_size", i.party_size,                  //
+                      "party_max_size", i.party_max_size,          //
+                      "auth_required", i.auth_required ? Py_True : Py_False,  //
+                      "build_number", i.build_number,                         //
+                      "protocol_version", i.protocol_version);
+    PyList_Append(py_list, py_dict);
+    Py_DECREF(py_dict);
   }
   return py_list;
   BA_PYTHON_CATCH;
@@ -926,7 +895,14 @@ static PyMethodDef PyHostScanCycleDef = {
     (PyCFunction)PyHostScanCycle,  // method
     METH_VARARGS | METH_KEYWORDS,  // flags
 
-    "host_scan_cycle() -> list[dict[str, str]]\n"
+    "host_scan_cycle() -> list[dict[str, Any]]\n"
+    "\n"
+    "Run a lan-scan cycle and return results gathered so far.\n"
+    "\n"
+    "Hosts answering only the old v1 query form have ``has_v2`` False\n"
+    "and carry defaults for the v2-only fields (``party_name``,\n"
+    "``party_size``, ``party_max_size``, ``auth_required``,\n"
+    "``build_number``, ``protocol_version``).\n"
     "\n"
     "(internal)\n"
     "\n"
@@ -935,8 +911,8 @@ static PyMethodDef PyHostScanCycleDef = {
 
 // ---------------------------- end_host_scanning ------------------------------
 
-static auto PyEndHostScanning(PyObject* self, PyObject* args,
-                              PyObject* keywds) -> PyObject* {
+static auto PyEndHostScanning(PyObject* self, PyObject* args, PyObject* keywds)
+    -> PyObject* {
   BA_PYTHON_TRY;
   auto* appmode = classic::ClassicAppMode::GetActiveOrThrow();
   appmode->EndHostScanning();
@@ -981,8 +957,8 @@ static PyMethodDef PyHaveConnectedClientsDef = {
 
 // ------------------------------ chatmessage ----------------------------------
 
-static auto PyChatMessage(PyObject* self, PyObject* args,
-                          PyObject* keywds) -> PyObject* {
+static auto PyChatMessage(PyObject* self, PyObject* args, PyObject* keywds)
+    -> PyObject* {
   BA_PYTHON_TRY;
   std::string message;
   PyObject* message_obj;
@@ -1024,7 +1000,7 @@ static PyMethodDef PyChatMessageDef = {
     (PyCFunction)PyChatMessage,    // method
     METH_VARARGS | METH_KEYWORDS,  // flags
 
-    "chatmessage(message: str | babase.Lstr,\n"
+    "chatmessage(message: str | babase.Lstr | babase.LangStr,\n"
     "  clients: Sequence[int] | None = None,\n"
     "  sender_override: str | None = None) -> None\n"
     "\n"
@@ -1033,8 +1009,8 @@ static PyMethodDef PyChatMessageDef = {
 
 // --------------------------- get_chat_messages -------------------------------
 
-static auto PyGetChatMessages(PyObject* self, PyObject* args,
-                              PyObject* keywds) -> PyObject* {
+static auto PyGetChatMessages(PyObject* self, PyObject* args, PyObject* keywds)
+    -> PyObject* {
   BA_PYTHON_TRY;
 
   BA_PRECONDITION(g_base->InLogicThread());
@@ -1074,7 +1050,6 @@ auto PythonMethodsNetworking::GetMethods() -> std::vector<PyMethodDef> {
       PyDisconnectFromHostDef,
       PyDisconnectClientDef,
       PyGetClientPublicDeviceUUIDDef,
-      PyGetClientIPAddressDef,
       PyGetClientPingDef,
       PyGetConnectionToHostInfoDef,
       PyGetConnectionToHostInfo2Def,
@@ -1084,8 +1059,8 @@ auto PythonMethodsNetworking::GetMethods() -> std::vector<PyMethodDef> {
       PySetPublicPartyPublicAddressIPV6Def,
       PySetAuthenticateClientsDef,
       PySetAdminsDef,
-      PySetAdminTokensDef,
-      PySetEnableAdminsKickDef,
+      PySetHostingAssetPackagesDef,
+      PySetHostPasswordDef,
       PySetEnableDefaultKickVotingDef,
       PySetPublicPartyMaxSizeDef,
       PySetPublicPartyQueueEnabledDef,

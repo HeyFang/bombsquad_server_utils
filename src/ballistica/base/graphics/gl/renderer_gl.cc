@@ -31,6 +31,7 @@
 #include "ballistica/base/graphics/gl/program/program_sprite_gl.h"
 #include "ballistica/base/graphics/gl/render_target_gl.h"
 #include "ballistica/base/graphics/gl/texture_data_gl.h"
+#include "ballistica/core/platform/platform.h"
 #include "ballistica/shared/math/rect.h"
 
 // On SDL builds, SDL.h provides SDL_GL_GetProcAddress for loading GL extension
@@ -295,10 +296,17 @@ void RendererGL::CheckGLCapabilities_() {
     basestr = "OpenGL";
   }
 
-  g_core->logging->Log(LogName::kBaGraphics, LogLevel::kInfo,
-                       std::string("Using ") + basestr + " (vendor: " + vendor
-                           + ", renderer: " + renderer
-                           + ", version: " + version_str + ").");
+  // Pull our device-tier flag: computed Java-side on Android (from GLES
+  // version + RAM, before the renderer came up) and always false on
+  // desktop/iOS. Drives framebuffer color depth, render resolution, and
+  // graphics quality. See docs/initiatives/low-end-device-tiering.md.
+  low_end_device_ = g_core->platform->low_end_device();
+
+  g_core->logging->Log(
+      LogName::kBaGraphics, LogLevel::kInfo,
+      std::string("Using ") + basestr + " (vendor: " + vendor
+          + ", renderer: " + renderer + ", version: " + version_str
+          + ", low-end-device: " + (low_end_device_ ? "yes" : "no") + ").");
 
   // Build a vector of extensions. Newer GLs give us extensions as lists
   // already, but on older ones we may need to break a single string apart
@@ -329,22 +337,23 @@ void RendererGL::CheckGLCapabilities_() {
                   std::istream_iterator<std::string>()};
   }
 
-  // On Android, look at the GL version and try to get gl3 funcs to
-  // determine if we're running ES3 or not.
 #if BA_PLATFORM_ANDROID
 
   BA_DEBUG_CHECK_GL_ERROR;
 
-  // Flag certain devices as 'speedy' - we use this to enable high/higher
-  // quality and whatnot (even in cases where ES3 isnt available).
-
-  // Let just consider ES 3.2 stuff speedy.
-  assert(gl_version_major() == 3);
-  is_speedy_android_device_ = gl_version_minor() >= 2;
-
   is_adreno_ = (strstr(renderer, "Adreno") != nullptr);
 
+  // Currently just the inverse of the device tier, but kept as its own var
+  // in case we want to diverge later.
+  is_speedy_android_device_ = !low_end_device_;
+
 #endif  // BA_PLATFORM_ANDROID
+
+  // Record actual GL_KHR_debug support; TrySetupGLDebugOutput_ must not
+  // trust proc addresses alone (eglGetProcAddress can return non-null
+  // for unsupported functions), and touching the KHR debug enums
+  // without the extension yields GL_INVALID_ENUM.
+  gl_supports_khr_debug_ = CheckGLExtension(extensions, "debug");
 
   std::list<TextureCompressionType> c_types;
   assert(g_base->graphics);
@@ -551,21 +560,12 @@ void RendererGL::UpdateMSAAEnabled_() {
       enable_msaa_ = false;
     }
   } else if (g_buildconfig.platform_android()) {
-    // lets allow full 1080p msaa with newer stuff..
-    int max_msaa_res = is_tegra_k1_ ? 1200 : 800;
-
-    // To start, see if it looks like we support msaa on paper.
-    enable_msaa_ =
-        ((screen_render_target()->physical_height()
-          <= static_cast<float>(max_msaa_res))
-         && (msaa_max_samples_rgb8_ > 0) && (msaa_max_samples_rgb565_ > 0));
-
-    // Ok, lets be careful here; msaa blitting/etc seems to be particular in
-    // terms of supported formats/etc so let's only enable it on
-    // explicitly-tested hardware for now.
-    if (!is_tegra_4_ && !is_tegra_k1_ && !is_recent_adreno_) {
-      enable_msaa_ = false;
-    }
+    // No auto-MSAA on Android for now. It was already de-facto off (the
+    // device flags it keyed on were never set), and the old path pulled
+    // depth out of the MSAA buffer in ways that seem fragile. Keep it off
+    // until that can be made safe. See
+    // docs/initiatives/low-end-device-tiering.md.
+    enable_msaa_ = false;
   } else {
     enable_msaa_ = false;
   }
@@ -607,6 +607,15 @@ auto RendererGL::GetGLTextureFormat(TextureFormat f) -> GLenum {
       break;
     case TextureFormat::kASTC_8x8:
       return GL_COMPRESSED_RGBA_ASTC_8x8_KHR;
+      break;
+    case TextureFormat::kASTC_5x5:
+      return GL_COMPRESSED_RGBA_ASTC_5x5_KHR;
+      break;
+    case TextureFormat::kASTC_10x10:
+      return GL_COMPRESSED_RGBA_ASTC_10x10_KHR;
+      break;
+    case TextureFormat::kASTC_12x12:
+      return GL_COMPRESSED_RGBA_ASTC_12x12_KHR;
       break;
     default:
       throw Exception("Invalid TextureFormat: "
@@ -916,10 +925,6 @@ void RendererGL::SyncGLState_() {
   glDisable(GL_BLEND);
   blend_ = false;
 
-  // Disable dithering; on desktop GL this is a no-op but on ANGLE (Windows)
-  // dithering can produce visible noise/grain on smooth transparent gradients.
-  glDisable(GL_DITHER);
-
   // Currently we only ever write to an alpha buffer for our vr flat overlay
   // texture, and in that case we need alpha to accumulate; not get
   // overwritten. could probably enable this everywhere but I don't know if
@@ -1214,6 +1219,7 @@ void RendererGL::ProcessRenderCommandBuffer(RenderCommandBuffer* buffer,
             p->SetColor(r, g, b, a);
             p->SetColorTexture(buffer->GetTexture());
             p->SetFlatness(flatness);
+            p->SetTexPremultiplied(premult ? 1.0f : 0.0f);
             break;
           }
           case ShadingType::kSimpleTextureModulatedTransparentShadow: {
@@ -1236,6 +1242,7 @@ void RendererGL::ProcessRenderCommandBuffer(RenderCommandBuffer* buffer,
             p->SetShadow(shadow_offset_x, shadow_offset_y,
                          std::max(0.0f, shadow_blur), shadow_opacity);
             p->SetMaskUV2Texture(t_mask);
+            p->SetTexPremultiplied(premult ? 1.0f : 0.0f);
             break;
           }
           case ShadingType::kSimpleTexModulatedTransShadowFlatness: {
@@ -1260,6 +1267,7 @@ void RendererGL::ProcessRenderCommandBuffer(RenderCommandBuffer* buffer,
                          std::max(0.0f, shadow_blur), shadow_opacity);
             p->SetMaskUV2Texture(t_mask);
             p->SetFlatness(flatness);
+            p->SetTexPremultiplied(premult ? 1.0f : 0.0f);
             break;
           }
           case ShadingType::kSimpleTextureModulatedTransparentGlow: {
@@ -3323,6 +3331,11 @@ void RendererGL::TrySetupGLDebugOutput_() {
   // Apple ES (iOS/tvOS) and Apple desktop (macOS Xcode) lack proc-address APIs
   // and GL_KHR_debug header support, so they are skipped entirely.
 #if BA_OPENGL_IS_ES && BA_SDL_BUILD
+  if (!gl_supports_khr_debug_) {
+    g_core->logging->Log(kGLDebugLogName, LogLevel::kInfo,
+                         "GL debug output not available (no GL_KHR_debug).");
+    return;
+  }
   auto set_callback = reinterpret_cast<PFNGLDEBUGMESSAGECALLBACKKHRPROC>(
       SDL_GL_GetProcAddress("glDebugMessageCallbackKHR"));
   gl_debug_message_control_khr_ =
@@ -3335,6 +3348,11 @@ void RendererGL::TrySetupGLDebugOutput_() {
   }
   set_callback(GLDebugCallbackKHR_, nullptr);
 #elif BA_OPENGL_IS_ES && BA_PLATFORM_ANDROID
+  if (!gl_supports_khr_debug_) {
+    g_core->logging->Log(kGLDebugLogName, LogLevel::kInfo,
+                         "GL debug output not available (no GL_KHR_debug).");
+    return;
+  }
   auto set_callback = reinterpret_cast<PFNGLDEBUGMESSAGECALLBACKKHRPROC>(
       eglGetProcAddress("glDebugMessageCallbackKHR"));
   gl_debug_message_control_khr_ =

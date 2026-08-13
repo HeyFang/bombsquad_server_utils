@@ -78,6 +78,7 @@ class AppConfig {
     kShowDeprecatedLoginTypes,
     kHighlightPotentialTokenPurchases,
     kUseNativePythonREPL,
+    kDisableXInput,
     kLast  // Sentinel.
   };
 

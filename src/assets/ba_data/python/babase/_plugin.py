@@ -2,8 +2,6 @@
 #
 """Plugin related functionality."""
 
-from __future__ import annotations
-
 import logging
 import importlib.util
 from typing import TYPE_CHECKING, override
@@ -49,7 +47,7 @@ class PluginSubsystem(AppSubsystem):
 
         :meta private:
         """
-        from babase._language import Lstr
+        from babase import builtinassets
 
         config_changed = False
         found_new = False
@@ -91,7 +89,7 @@ class PluginSubsystem(AppSubsystem):
         # found new ones.
         if found_new and not auto_enable_new_plugins:
             _babase.screenmessage(
-                Lstr(resource='pluginsDetectedText'), color=(0, 1, 0)
+                builtinassets.strings.plugins.detected, color=(0, 1, 0)
             )
             _babase.getsimplesound('ding').play()
 
@@ -144,9 +142,8 @@ class PluginSubsystem(AppSubsystem):
         if disappeared_plugs:
             _babase.getsimplesound('shieldDown').play()
             _babase.screenmessage(
-                Lstr(
-                    resource='pluginsRemovedText',
-                    subs=[('${NUM}', str(len(disappeared_plugs)))],
+                builtinassets.strings.plugins.removed(
+                    count=len(disappeared_plugs)
                 ),
                 color=(1, 1, 0),
             )
@@ -268,8 +265,8 @@ class PluginSpec:
 
     def attempt_load_if_enabled(self) -> Plugin | None:
         """Possibly load the plugin and log any errors."""
+        from babase import builtinassets
         from babase._general import getclass
-        from babase._language import Lstr
 
         assert not self.attempted_load
         assert self.plugin is None
@@ -284,12 +281,8 @@ class PluginSpec:
         except Exception as exc:
             _babase.getsimplesound('error').play()
             _babase.screenmessage(
-                Lstr(
-                    resource='pluginClassLoadErrorText',
-                    subs=[
-                        ('${PLUGIN}', self.class_path),
-                        ('${ERROR}', str(exc)),
-                    ],
+                builtinassets.strings.plugins.class_load_error(
+                    plugin=self.class_path, error=str(exc)
                 ),
                 color=(1, 0, 0),
             )
@@ -305,12 +298,8 @@ class PluginSpec:
 
             _babase.getsimplesound('error').play()
             _babase.screenmessage(
-                Lstr(
-                    resource='pluginInitErrorText',
-                    subs=[
-                        ('${PLUGIN}', self.class_path),
-                        ('${ERROR}', str(exc)),
-                    ],
+                builtinassets.strings.plugins.init_error(
+                    plugin=self.class_path, error=str(exc)
                 ),
                 color=(1, 0, 0),
             )

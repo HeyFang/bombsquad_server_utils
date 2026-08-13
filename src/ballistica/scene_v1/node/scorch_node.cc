@@ -70,10 +70,15 @@ void ScorchNode::Draw(base::FrameDef* frame_def) {
                                           position_[2]);
   base::SimpleComponent c(frame_def->light_shadow_pass());
   c.SetTransparent(true);
-  c.SetColor(color_[0], color_[1], color_[2], o * 0.35f);
-  c.SetTexture(g_base->assets->BuiltinTextureOld(
-      big_ ? base::BuiltinTextureOldID::kScorchBig
-           : base::BuiltinTextureOldID::kScorch));
+  auto* tex = g_base->assets->BuiltinTexture(
+      big_ ? base::BuiltinTextureID::kTexturesScorchBig
+           : base::BuiltinTextureID::kTexturesScorch);
+  // Premultiplied texture + straight faded color; premultiply rgb by alpha
+  // ourselves (see docs/design/premultiplied-alpha.md).
+  float a = o * 0.35f;
+  float cmul = tex->premultiplied() ? a : 1.0f;
+  c.SetColor(color_[0] * cmul, color_[1] * cmul, color_[2] * cmul, a);
+  c.SetTexture(tex);
   {
     auto xf = c.ScopedTransform();
     c.Translate(position_[0], position_[1], position_[2]);
@@ -82,7 +87,7 @@ void ScorchNode::Draw(base::FrameDef* frame_def) {
     c.Rotate(Utils::precalc_rand_1(id() % kPrecalcRandsCount) * 360.0f, 0, 1,
              0);
     c.DrawMeshAsset(
-        g_base->assets->BuiltinMeshOld(base::BuiltinMeshOldID::kScorch));
+        g_base->assets->BuiltinMesh(base::BuiltinMeshID::kMeshesScorch));
   }
   c.Submit();
 }

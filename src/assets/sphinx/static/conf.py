@@ -9,8 +9,6 @@
 # pylint: disable=invalid-name, redefined-builtin
 # pylint: disable=missing-module-docstring
 
-from __future__ import annotations
-
 import os
 import types
 import logging
@@ -176,6 +174,7 @@ nitpick_ignore = [
     # 3rd party stuff we don't gen docs for (could look into intersphinx).
     ('py:class', 'astroid.nodes.node_ng.NodeNG'),
     ('py:class', 'astroid.Manager'),
+    ('py:class', 'PyLinter'),
     #
     # TypeVars have no docs.
     ('py:class', 'T'),
@@ -204,6 +203,7 @@ nitpick_ignore = [
     ('py:class', 'asyncio.streams.StreamWriter'),
     ('py:class', 'concurrent.futures.thread.ThreadPoolExecutor'),
     ('py:class', 'urllib3.response.BaseHTTPResponse'),
+    ('py:class', 'urllib3.poolmanager.PoolManager'),
     ('py:class', 'socket.AddressFamily'),
     ('py:attr', 'socket.AF_INET'),
     ('py:attr', 'socket.AF_INET6'),
@@ -247,6 +247,49 @@ nitpick_ignore = [
     ('py:attr', 'cert'),
     ('py:class', 'PowerupBoxFactory.powerup_accept_material'),
     ('py:attr', 'batools.featureset.FeatureSet.has_python_app_subsystem'),
+    #
+    # efro.threadpool's ``Future[T]`` API surfaces a module-qualified
+    # TypeVar and the private stdlib ``Future`` path; neither resolves
+    # to docs (cf. ``concurrent.futures.thread.ThreadPoolExecutor``
+    # above, ignored for the same reason).
+    ('py:class', 'efro.threadpool.T'),
+    ('py:class', 'concurrent.futures._base.Future'),
+    #
+    # babase._simpledialog uses a private ``_Unset`` sentinel in its
+    # public signatures (``str | Lstr | _Unset``) to distinguish an
+    # unset arg from None; the private class has no doc target.
+    ('py:class', 'babase._simpledialog._Unset'),
+    # ...and the bare form, which is what autodoc emits for the
+    # stringized annotations in that module's own signatures.
+    ('py:class', '_Unset'),
+    #
+    # docui-v2 / langstr (bacommon) cross-module refs. The bare class
+    # refs (Lstr, StringSelector) are docstring cross-refs that should be
+    # fully qualified at the source eventually; EncodedLangStr /
+    # WrapperTree are PEP 695 ``type`` aliases autodoc renders in
+    # signatures but can't cross-ref as classes. See docs/followups.md.
+    ('py:class', 'Lstr'),
+    ('py:class', 'StringSelector'),
+    ('py:class', 'bacommon.langstr._core.EncodedLangStr'),
+    ('py:class', 'bacommon.langstr._wrapper.WrapperTree'),
+    # Feature-set-alias-qualified LangStr refs: lib modules annotate as
+    # ``bs.LangStr`` / ``bui.LangStr`` (their local ``import bascenev1 as
+    # bs`` / ``bauiv1 as bui`` alias), and stringized annotations keep the
+    # alias, which Sphinx can't resolve. Same story as ``cdlg.*`` below.
+    ('py:class', 'bs.LangStr'),
+    ('py:class', 'bui.LangStr'),
+    # bacommon.assetspec texture/mesh refs — same story: bare cross-module
+    # class refs to fully-qualify eventually; AssetGroupTree is a PEP 695
+    # ``type`` alias autodoc renders in signatures but can't cross-ref.
+    ('py:class', 'TextureHandle'),
+    ('py:class', 'MeshHandle'),
+    ('py:class', 'AssetGroup'),
+    ('py:class', 'bacommon.assetspec._wrapper.AssetGroupTree'),
+    # Same story: FeedbackEvent is a PEP 695 ``type`` alias (a Literal of
+    # the haptic event names) that autodoc renders into
+    # ``bascenev1.Player.send_feedback``'s signature under its defining
+    # module rather than the package that re-exports it.
+    ('py:class', 'bascenev1._player.FeedbackEvent'),
 ]
 
 # Regex-based nitpick ignores for whole categories of references.
@@ -258,6 +301,7 @@ nitpick_ignore_regex = [
     ('py:class', r'bacommon\.classic\..*'),
     ('py:class', r'bacommon\.clienteffect\..*'),
     ('py:class', r'bacommon\.cloud\..*'),
+    ('py:class', r'bacommon\.clouddialog\..*'),
     # 'cdlg' is an alias for bacommon.clouddialog (a skipped namespace).
     ('py:class', r'cdlg\..*'),
     # Truncated generic type strings that Sphinx 9.x emits as cross-reference
@@ -271,6 +315,10 @@ nitpick_ignore_regex = [
     ('py:class', r'dict\[.*'),
     ('py:class', r'list\[.*'),
     ('py:class', r'Literal\[.*'),
+    # Same Sphinx truncation bug, but emitted as a ``py:obj`` ref when
+    # the generic resolves to a qualified name (e.g. a
+    # ``Callable[[], None]`` annotation surfaces ``typing.Callable[[]``).
+    ('py:obj', r'.*Callable\[.*'),
 ]
 
 # Gives us links to common Python types.

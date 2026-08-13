@@ -2,8 +2,6 @@
 #
 """Utility functionality related to the overall operation of the app."""
 
-from __future__ import annotations
-
 import gc
 import os
 import time
@@ -512,8 +510,8 @@ def _summarize_garbage(loglevel: int) -> str:
         debug_types: list[str] = []
         debug_type_limit = 1
     else:
-        debug_types = list(plus.cloud.vals.gc_debug_types)
-        debug_type_limit = plus.cloud.vals.gc_debug_type_limit
+        debug_types = list(plus.cloud.vals_persistent.gc_debug_types)
+        debug_type_limit = plus.cloud.vals_persistent.gc_debug_type_limit
 
     # Optional env-var overrides for local debugging. Fully override
     # the cloud values when set, so a developer can investigate a
