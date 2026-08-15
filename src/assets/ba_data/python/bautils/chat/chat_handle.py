@@ -4,7 +4,6 @@
 A chat interpreter to manage chat related thingsand combining other utilities.
 """
 
-from __future__ import annotations
 from .cmd_manager import CommandManager
 
 

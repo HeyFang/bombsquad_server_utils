@@ -2,7 +2,6 @@
 #
 """A chat interpreter to manage chat related things."""
 
-from __future__ import annotations
 
 from typing import TYPE_CHECKING
 

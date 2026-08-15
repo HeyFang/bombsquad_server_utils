@@ -353,6 +353,34 @@ static PyMethodDef PySetAdminsDef = {
     "(internal)",
 };
 
+// ------------------------ set_enable_admins_kick ---------------------------
+
+static auto PySetEnableAdminsKick(PyObject* self, PyObject* args,
+                                  PyObject* keywds) -> PyObject* {
+  BA_PYTHON_TRY;
+  int enable;
+  static const char* kwlist[] = {"enable", nullptr};
+  if (!PyArg_ParseTupleAndKeywords(args, keywds, "p",
+                                   const_cast<char**>(kwlist), &enable)) {
+    return nullptr;
+  }
+  if (auto* appmode{classic::ClassicAppMode::GetActiveOrWarn()}) {
+    appmode->set_admins_kick_enabled(static_cast<bool>(enable));
+  }
+  Py_RETURN_NONE;
+  BA_PYTHON_CATCH;
+}
+
+static PyMethodDef PySetEnableAdminsKickDef = {
+    "set_enable_admins_kick",            // name
+    (PyCFunction)PySetEnableAdminsKick,  // method
+    METH_VARARGS | METH_KEYWORDS,        // flags
+
+    "set_enable_admins_kick(enable: bool) -> None\n"
+    "\n"
+    "(internal)",
+};
+
 // ----------------------- set_hosting_asset_packages --------------------------
 
 static auto PySetHostingAssetPackages(PyObject* self, PyObject* args,
@@ -764,6 +792,61 @@ static PyMethodDef PyGetClientPublicDeviceUUIDDef = {
     "periodically with updates to the game or operating system.",
 };
 
+// ----------------------- get_client_ip_address -----------------------------
+
+static PyObject* PyGetClientIPAddress(PyObject* self, PyObject* args,
+                                      PyObject* keywds) {
+  BA_PYTHON_TRY;
+  int client_id;
+  static const char* kwlist[] = {"client_id", nullptr};
+  if (!PyArg_ParseTupleAndKeywords(args, keywds, "i",
+                                   const_cast<char**>(kwlist), &client_id)) {
+    return nullptr;
+  }
+  // Error if we're not in our app-mode.
+  auto* appmode = classic::ClassicAppMode::GetActiveOrThrow();
+
+  // Find the connection associated with the client_id
+  auto&& connection_iter{
+      appmode->connections()->connections_to_clients().find(client_id)};
+
+  // Does this connection exist?
+  if (connection_iter
+      == appmode->connections()->connections_to_clients().end()) {
+    Py_RETURN_NONE;  // No connection found for this client_id
+  }
+
+  // Connections should always be valid refs.
+  assert(connection_iter->second.exists());
+  ConnectionToClient* connection =
+      connection_iter->second.get();  // Get the raw pointer
+
+  // Call the C++ method we added earlier
+  std::string ip_address = connection->GetClientIPAddress();
+
+  // Return the result as a Python string, or None if empty/NA
+  if (ip_address.empty() || ip_address == "N/A") {
+    Py_RETURN_NONE;
+  } else {
+    return PyUnicode_FromString(ip_address.c_str());
+  }
+
+  BA_PYTHON_CATCH;
+}
+
+static PyMethodDef PyGetClientIPAddressDef = {
+    "get_client_ip_address",            // name
+    (PyCFunction)PyGetClientIPAddress,  // method
+    METH_VARARGS | METH_KEYWORDS,       // flags
+
+    "get_client_ip_address(client_id: int) -> str | None\n"
+    "\n"
+    "(internal)\n"
+    "\n"
+    "Return the IP address string for a connected client.\n"
+    "Returns None if the client_id is invalid or the IP cannot be determined.",
+};
+
 // ----------------------- get_client_ping -----------------------------
 
 static PyObject* PyGetClientPing(PyObject* self, PyObject* args,
@@ -1050,6 +1133,7 @@ auto PythonMethodsNetworking::GetMethods() -> std::vector<PyMethodDef> {
       PyDisconnectFromHostDef,
       PyDisconnectClientDef,
       PyGetClientPublicDeviceUUIDDef,
+      PyGetClientIPAddressDef,
       PyGetClientPingDef,
       PyGetConnectionToHostInfoDef,
       PyGetConnectionToHostInfo2Def,
@@ -1062,6 +1146,7 @@ auto PythonMethodsNetworking::GetMethods() -> std::vector<PyMethodDef> {
       PySetHostingAssetPackagesDef,
       PySetHostPasswordDef,
       PySetEnableDefaultKickVotingDef,
+      PySetEnableAdminsKickDef,
       PySetPublicPartyMaxSizeDef,
       PySetPublicPartyQueueEnabledDef,
       PyGetPublicPartyMaxSizeDef,

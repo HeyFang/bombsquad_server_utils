@@ -1016,6 +1016,16 @@ void ConnectionToClient::HandleMasterServerClientInfo(PyObject* info_obj) {
   got_v1_auth_from_master_server_ = true;
 }
 
+auto ConnectionToClient::GetClientInstanceUUID() const -> std::string {
+  // Base class returns empty; UDP override will return the real one.
+  return "";
+}
+
+auto ConnectionToClient::GetClientIPAddress() const -> std::string {
+  // Base implementation returns "N/A"
+  return "N/A";
+}
+
 auto ConnectionToClient::IsAdmin() const -> bool {
   auto* appmode = classic::ClassicAppMode::GetActiveOrFatal();
   if (peer_public_account_id_.empty()) {

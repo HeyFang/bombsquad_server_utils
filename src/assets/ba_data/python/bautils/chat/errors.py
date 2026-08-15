@@ -2,7 +2,6 @@
 #
 """A chat interpreter to manage chat related things."""
 
-from __future__ import annotations
 
 import babase as ba
 

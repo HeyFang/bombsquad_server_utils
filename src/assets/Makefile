@@ -335,7 +335,6 @@ SCRIPT_TARGETS_PY_PUBLIC = \
   $(BUILD_DIR)/ba_data/python/bascenev1lib/actor/zoomtext.py \
   $(BUILD_DIR)/ba_data/python/bascenev1lib/game/__init__.py \
   $(BUILD_DIR)/ba_data/python/bascenev1lib/game/assault.py \
-  $(BUILD_DIR)/ba_data/python/bascenev1lib/game/boxing.py \
   $(BUILD_DIR)/ba_data/python/bascenev1lib/game/capturetheflag.py \
   $(BUILD_DIR)/ba_data/python/bascenev1lib/game/chosenone.py \
   $(BUILD_DIR)/ba_data/python/bascenev1lib/game/conquest.py \
@@ -519,7 +518,6 @@ SCRIPT_TARGETS_PY_PUBLIC = \
   $(BUILD_DIR)/ba_data/python/bautils/chat/errors.py \
   $(BUILD_DIR)/ba_data/python/bautils/chat/server_command.py \
   $(BUILD_DIR)/ba_data/python/bautils/discord/__init__.py \
-  $(BUILD_DIR)/ba_data/python/bautils/discord/bot.py \
   $(BUILD_DIR)/ba_data/python/bautils/discord/discord_verify_server.py \
   $(BUILD_DIR)/ba_data/python/bautils/players/__init__.py \
   $(BUILD_DIR)/ba_data/python/bautils/plugman/__init__.py \
